@@ -13,5 +13,5 @@ jobs:
       - run: uv run ruff check src tests eval examples
       - run: uv run pytest -q
       - run: uv run semlayer demo && uv run semlayer eval --oracle
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@v3
         env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
