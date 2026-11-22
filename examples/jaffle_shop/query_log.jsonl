@@ -1,0 +1,38 @@
+{"user": "alice", "sql": "SELECT SUM(amount) AS revenue FROM payments WHERE status = 'success'"}
+{"user": "alice", "sql": "SELECT SUM(amount) AS revenue FROM payments WHERE status = 'success'"}
+{"user": "alice", "sql": "SELECT SUM(amount) AS revenue FROM payments WHERE status = 'success'"}
+{"user": "alice", "sql": "SELECT SUM(amount) AS revenue FROM payments WHERE status = 'success'"}
+{"user": "alice", "sql": "SELECT SUM(amount) AS revenue FROM payments WHERE status = 'success'"}
+{"user": "alice", "sql": "SELECT SUM(amount) AS revenue FROM payments WHERE status = 'success'"}
+{"user": "alice", "sql": "SELECT method, SUM(amount) AS revenue FROM payments WHERE status = 'success' GROUP BY method"}
+{"user": "alice", "sql": "SELECT method, SUM(amount) AS revenue FROM payments WHERE status = 'success' GROUP BY method"}
+{"user": "alice", "sql": "SELECT method, SUM(amount) AS revenue FROM payments WHERE status = 'success' GROUP BY method"}
+{"user": "bob", "sql": "SELECT SUM(amount) AS revenue FROM payments"}
+{"user": "bob", "sql": "SELECT SUM(amount) AS revenue FROM payments"}
+{"user": "bob", "sql": "SELECT SUM(amount) FROM payments"}
+{"user": "alice", "sql": "SELECT COUNT(DISTINCT customer_id) AS active_customers FROM orders WHERE order_date >= current_date - 30"}
+{"user": "alice", "sql": "SELECT COUNT(DISTINCT customer_id) AS active_customers FROM orders WHERE order_date >= current_date - 30"}
+{"user": "alice", "sql": "SELECT COUNT(DISTINCT customer_id) AS active_customers FROM orders WHERE order_date >= current_date - 30"}
+{"user": "alice", "sql": "SELECT COUNT(DISTINCT customer_id) AS active_customers FROM orders WHERE order_date >= current_date - 30"}
+{"user": "bob", "sql": "SELECT COUNT(DISTINCT customer_id) AS active_customers FROM orders WHERE status = 'completed'"}
+{"user": "bob", "sql": "SELECT COUNT(DISTINCT customer_id) AS active_customers FROM orders WHERE status = 'completed'"}
+{"user": "carol", "sql": "SELECT COUNT(DISTINCT customer_id) AS active_customers FROM payments WHERE amount > 0"}
+{"user": "bob", "sql": "SELECT COUNT(*) AS order_count FROM orders"}
+{"user": "bob", "sql": "SELECT COUNT(*) AS order_count FROM orders"}
+{"user": "bob", "sql": "SELECT COUNT(*) AS order_count FROM orders"}
+{"user": "bob", "sql": "SELECT COUNT(*) AS order_count FROM orders"}
+{"user": "bob", "sql": "SELECT COUNT(*) AS order_count FROM orders"}
+{"user": "bob", "sql": "SELECT status, COUNT(*) AS order_count FROM orders GROUP BY status"}
+{"user": "bob", "sql": "SELECT status, COUNT(*) AS order_count FROM orders GROUP BY status"}
+{"user": "bob", "sql": "SELECT status, COUNT(*) AS order_count FROM orders GROUP BY status"}
+{"user": "carol", "sql": "SELECT AVG(amount) AS avg_payment FROM payments WHERE status = 'success'"}
+{"user": "carol", "sql": "SELECT AVG(amount) AS avg_payment FROM payments WHERE status = 'success'"}
+{"user": "carol", "sql": "SELECT AVG(amount) AS avg_payment FROM payments WHERE status = 'success'"}
+{"user": "carol", "sql": "SELECT region, COUNT(*) AS customer_count FROM customers GROUP BY region"}
+{"user": "carol", "sql": "SELECT region, COUNT(*) AS customer_count FROM customers GROUP BY region"}
+{"user": "carol", "sql": "SELECT COUNT(*) AS customer_count FROM customers"}
+{"user": "carol", "sql": "SELECT COUNT(*) AS new_customers FROM customers WHERE created_at >= current_date - 30"}
+{"user": "carol", "sql": "SELECT COUNT(*) AS new_customers FROM customers WHERE created_at >= current_date - 30"}
+{"user": "alice", "sql": "SELECT c.region, SUM(p.amount) AS revenue FROM payments p JOIN customers c ON c.id = p.customer_id GROUP BY c.region"}
+{"user": "alice", "sql": "SELECT c.region, SUM(p.amount) AS revenue FROM payments p JOIN customers c ON c.id = p.customer_id GROUP BY c.region"}
+{"user": "bob", "sql": "this is not sql"}

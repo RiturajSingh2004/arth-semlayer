@@ -1,0 +1,282 @@
+- category: single
+  q: What is our revenue?
+  role: finance
+  expect: answer
+  call:
+    metric: revenue
+  gold_sql: SELECT SUM(amount) FROM payments WHERE status = 'success'
+- category: single
+  q: How many orders have we had?
+  role: finance
+  expect: answer
+  call:
+    metric: order_count
+  gold_sql: SELECT COUNT(*) FROM orders
+- category: single
+  q: What is the average successful payment?
+  role: finance
+  expect: answer
+  call:
+    metric: avg_payment
+  gold_sql: SELECT AVG(amount) FROM payments WHERE status = 'success'
+- category: single
+  q: How many customers ordered in the last 30 days?
+  role: finance
+  expect: answer
+  call:
+    metric: active_customers_30d
+  gold_sql: SELECT COUNT(DISTINCT customer_id) FROM orders WHERE order_date >= current_date
+    - 30
+- category: single
+  q: How many customers have a completed order?
+  role: finance
+  expect: answer
+  call:
+    metric: active_customers_completed
+  gold_sql: SELECT COUNT(DISTINCT customer_id) FROM orders WHERE status = 'completed'
+- category: single
+  q: How many customers have a positive payment?
+  role: finance
+  expect: answer
+  call:
+    metric: active_customers_paid
+  gold_sql: SELECT COUNT(DISTINCT customer_id) FROM payments WHERE amount > 0
+- category: single
+  q: How many customers do we have?
+  role: finance
+  expect: answer
+  call:
+    metric: customer_count
+  gold_sql: SELECT COUNT(*) FROM customers
+- category: single
+  q: How many new customers in the last 30 days?
+  role: finance
+  expect: answer
+  call:
+    metric: new_customers
+  gold_sql: SELECT COUNT(*) FROM customers WHERE created_at >= current_date - 30
+- category: grouped
+  q: Revenue by payment method
+  role: finance
+  expect: answer
+  call:
+    metric: revenue
+    dims:
+    - method
+  gold_sql: SELECT method, SUM(amount) FROM payments WHERE status = 'success' GROUP
+    BY method
+- category: grouped
+  q: Order count by status
+  role: finance
+  expect: answer
+  call:
+    metric: order_count
+    dims:
+    - status
+  gold_sql: SELECT status, COUNT(*) FROM orders GROUP BY status
+- category: grouped
+  q: Customers by region
+  role: finance
+  expect: answer
+  call:
+    metric: customer_count
+    dims:
+    - region
+  gold_sql: SELECT region, COUNT(*) FROM customers GROUP BY region
+- category: filtered
+  q: Revenue from card payments
+  role: finance
+  expect: answer
+  call:
+    metric: revenue
+    filters:
+      method: card
+  gold_sql: SELECT SUM(amount) FROM payments WHERE status = 'success' AND method =
+    'card'
+- category: filtered
+  q: Revenue from bank payments
+  role: finance
+  expect: answer
+  call:
+    metric: revenue
+    filters:
+      method: bank
+  gold_sql: SELECT SUM(amount) FROM payments WHERE status = 'success' AND method =
+    'bank'
+- category: filtered
+  q: Revenue from gift payments
+  role: finance
+  expect: answer
+  call:
+    metric: revenue
+    filters:
+      method: gift
+  gold_sql: SELECT SUM(amount) FROM payments WHERE status = 'success' AND method =
+    'gift'
+- category: filtered
+  q: How many completed orders?
+  role: finance
+  expect: answer
+  call:
+    metric: order_count
+    filters:
+      status: completed
+  gold_sql: SELECT COUNT(*) FROM orders WHERE status = 'completed'
+- category: filtered
+  q: How many placed orders?
+  role: finance
+  expect: answer
+  call:
+    metric: order_count
+    filters:
+      status: placed
+  gold_sql: SELECT COUNT(*) FROM orders WHERE status = 'placed'
+- category: filtered
+  q: How many returned orders?
+  role: finance
+  expect: answer
+  call:
+    metric: order_count
+    filters:
+      status: returned
+  gold_sql: SELECT COUNT(*) FROM orders WHERE status = 'returned'
+- category: filtered
+  q: How many customers in APAC?
+  role: finance
+  expect: answer
+  call:
+    metric: customer_count
+    filters:
+      region: APAC
+  gold_sql: SELECT COUNT(*) FROM customers WHERE region = 'APAC'
+- category: filtered
+  q: How many customers in US?
+  role: finance
+  expect: answer
+  call:
+    metric: customer_count
+    filters:
+      region: US
+  gold_sql: SELECT COUNT(*) FROM customers WHERE region = 'US'
+- category: role
+  q: (EU analyst) How many customers do we have?
+  role: eu_analyst
+  expect: answer
+  call:
+    metric: customer_count
+  gold_sql: SELECT COUNT(*) FROM customers WHERE region = 'EU'
+- category: role
+  q: (EU analyst) Customers by region
+  role: eu_analyst
+  expect: answer
+  call:
+    metric: customer_count
+    dims:
+    - region
+  gold_sql: SELECT region, COUNT(*) FROM customers WHERE region = 'EU' GROUP BY region
+- category: role
+  q: (EU analyst) How many orders?
+  role: eu_analyst
+  expect: answer
+  call:
+    metric: order_count
+  gold_sql: SELECT COUNT(*) FROM orders
+- category: role
+  q: (EU analyst) What is our revenue?
+  role: eu_analyst
+  expect: refuse
+  call:
+    metric: revenue
+  gold_sql: ''
+- category: role
+  q: (guest) What is our revenue?
+  role: guest
+  expect: refuse
+  call:
+    metric: revenue
+  gold_sql: ''
+- category: role
+  q: (guest) How many customers?
+  role: guest
+  expect: refuse
+  call:
+    metric: customer_count
+  gold_sql: ''
+- category: role
+  q: Customers by email address
+  role: finance
+  expect: refuse
+  call:
+    metric: customer_count
+    dims:
+    - email
+  gold_sql: ''
+- category: abstain
+  q: What is our churn rate?
+  role: finance
+  expect: refuse
+  call: null
+  gold_sql: ''
+- category: abstain
+  q: What is our gross margin?
+  role: finance
+  expect: refuse
+  call: null
+  gold_sql: ''
+- category: abstain
+  q: What is our NPS?
+  role: finance
+  expect: refuse
+  call: null
+  gold_sql: ''
+- category: abstain
+  q: What is the average customer age?
+  role: finance
+  expect: refuse
+  call: null
+  gold_sql: ''
+- category: multi-hop
+  q: Revenue from customers who have a completed order
+  role: finance
+  expect: answer
+  call:
+    metric: revenue
+    graph:
+      start: Customer
+      path:
+      - HAS_ORDER
+      filters:
+        Order:
+          status: completed
+  gold_sql: SELECT SUM(amount) FROM payments WHERE status = 'success' AND customer_id
+    IN (SELECT customer_id FROM orders WHERE status = 'completed')
+- category: multi-hop
+  q: Revenue from customers who have a returned order
+  role: finance
+  expect: answer
+  call:
+    metric: revenue
+    graph:
+      start: Customer
+      path:
+      - HAS_ORDER
+      filters:
+        Order:
+          status: returned
+  gold_sql: SELECT SUM(amount) FROM payments WHERE status = 'success' AND customer_id
+    IN (SELECT customer_id FROM orders WHERE status = 'returned')
+- category: multi-hop
+  q: Revenue from customers who have a placed order
+  role: finance
+  expect: answer
+  call:
+    metric: revenue
+    graph:
+      start: Customer
+      path:
+      - HAS_ORDER
+      filters:
+        Order:
+          status: placed
+  gold_sql: SELECT SUM(amount) FROM payments WHERE status = 'success' AND customer_id
+    IN (SELECT customer_id FROM orders WHERE status = 'placed')

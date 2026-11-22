@@ -1,0 +1,11 @@
+# Local only. Seed first: `docker compose run --rm web demo`
+services:
+  web:            # review UI + JSON API on http://localhost:8000
+    build: .
+    ports: ["8000:8000"]
+    volumes: [".:/app"]
+  mcp:            # agent-facing MCP server over stdio: docker compose run --rm -T mcp
+    build: .
+    command: ["serve"]
+    stdin_open: true
+    volumes: [".:/app"]

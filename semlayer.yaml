@@ -1,0 +1,10 @@
+db: examples/jaffle_shop/jaffle.duckdb
+registry: definitions
+query_log: examples/jaffle_shop/query_log.jsonl
+# docs: path/to/dbt/target/manifest.json
+
+# LLM (on by default). It writes metric descriptions/explanations and powers the LLM eval arms.
+llm_provider: ollama          # ollama | openai (any OpenAI-compatible server) | none
+llm_model: qwen3.5:9b         # any model your engine serves
+# llm_url: http://localhost:11434    # openai provider: e.g. http://localhost:8080/v1 (llama.cpp), :1234/v1 (LM Studio)
+# llm_api_key_env: MY_API_KEY        # name of an env var holding a key, if your server needs one

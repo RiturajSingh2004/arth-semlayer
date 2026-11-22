@@ -1,0 +1,159 @@
+- category: single
+  q: Total sales
+  role: finance
+  expect: answer
+  call:
+    metric: revenue
+  gold_sql: SELECT SUM(amount) FROM payments WHERE status = 'success'
+- category: single
+  q: Number of orders
+  role: finance
+  expect: answer
+  call:
+    metric: order_count
+  gold_sql: SELECT COUNT(*) FROM orders
+- category: single
+  q: Mean payment amount for successful payments
+  role: finance
+  expect: answer
+  call:
+    metric: avg_payment
+  gold_sql: SELECT AVG(amount) FROM payments WHERE status = 'success'
+- category: single
+  q: How many customers made a payment?
+  role: finance
+  expect: answer
+  call:
+    metric: active_customers_paid
+  gold_sql: SELECT COUNT(DISTINCT customer_id) FROM payments WHERE amount > 0
+- category: single
+  q: How many customers signed up in the last 30 days?
+  role: finance
+  expect: answer
+  call:
+    metric: new_customers
+  gold_sql: SELECT COUNT(*) FROM customers WHERE created_at >= current_date - 30
+- category: grouped
+  q: Sales by method
+  role: finance
+  expect: answer
+  call:
+    metric: revenue
+    dims:
+    - method
+  gold_sql: SELECT method, SUM(amount) FROM payments WHERE status = 'success' GROUP
+    BY method
+- category: grouped
+  q: Orders per status
+  role: finance
+  expect: answer
+  call:
+    metric: order_count
+    dims:
+    - status
+  gold_sql: SELECT status, COUNT(*) FROM orders GROUP BY status
+- category: filtered
+  q: How many customers are in the EU?
+  role: finance
+  expect: answer
+  call:
+    metric: customer_count
+    filters:
+      region: EU
+  gold_sql: SELECT COUNT(*) FROM customers WHERE region = 'EU'
+- category: filtered
+  q: How many shipped orders?
+  role: finance
+  expect: answer
+  call:
+    metric: order_count
+    filters:
+      status: shipped
+  gold_sql: SELECT COUNT(*) FROM orders WHERE status = 'shipped'
+- category: filtered
+  q: Total sales paid by gift
+  role: finance
+  expect: answer
+  call:
+    metric: revenue
+    filters:
+      method: gift
+  gold_sql: SELECT SUM(amount) FROM payments WHERE status = 'success' AND method =
+    'gift'
+- category: role
+  q: (EU analyst) Number of customers per region
+  role: eu_analyst
+  expect: answer
+  call:
+    metric: customer_count
+    dims:
+    - region
+  gold_sql: SELECT region, COUNT(*) FROM customers WHERE region = 'EU' GROUP BY region
+- category: role
+  q: (EU analyst) What is the average payment?
+  role: eu_analyst
+  expect: refuse
+  call:
+    metric: avg_payment
+  gold_sql: ''
+- category: role
+  q: (guest) How many orders?
+  role: guest
+  expect: refuse
+  call:
+    metric: order_count
+  gold_sql: ''
+- category: abstain
+  q: What is the refund rate?
+  role: finance
+  expect: refuse
+  call: null
+  gold_sql: ''
+- category: abstain
+  q: Revenue by country
+  role: finance
+  expect: refuse
+  call:
+    metric: revenue
+    dims:
+    - country
+  gold_sql: ''
+- category: abstain
+  q: Orders by customer region
+  role: finance
+  expect: refuse
+  call:
+    metric: order_count
+    dims:
+    - region
+  gold_sql: ''
+- category: multi-hop
+  q: Total sales from customers with a shipped order
+  role: finance
+  expect: answer
+  call:
+    metric: revenue
+    graph:
+      start: Customer
+      path:
+      - HAS_ORDER
+      filters:
+        Order:
+          status: shipped
+  gold_sql: SELECT SUM(amount) FROM payments WHERE status = 'success' AND customer_id
+    IN (SELECT customer_id FROM orders WHERE status = 'shipped')
+- category: multi-hop
+  q: Total sales from customers with a returned order
+  role: finance
+  expect: answer
+  call:
+    metric: revenue
+    graph:
+      start: Customer
+      path:
+      - HAS_ORDER
+      filters:
+        Order:
+          status: returned
+  gold_sql: SELECT SUM(amount) FROM payments WHERE status = 'success' AND customer_id
+    IN (SELECT customer_id FROM orders WHERE status = 'returned')
