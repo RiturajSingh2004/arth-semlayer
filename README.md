@@ -1,4 +1,4 @@
-# ARTH: SemLayer
+# ARTH: Semantic Layer
 
 Repository: `arth-semlayer` · Python package and command: `semlayer`
 
