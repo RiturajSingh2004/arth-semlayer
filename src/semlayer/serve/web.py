@@ -1,4 +1,5 @@
 """Registry JSON API + Ryoku-themed technical Governance & Review UI (FastAPI + HTMX, zero build)."""
+import json
 from datetime import UTC, datetime
 from html import escape as e
 
@@ -7,8 +8,13 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from semlayer.compiler import SimpleCompiler
 from semlayer.conflicts import apply_pick, apply_split, detect
-from semlayer.core import KINDS, InvalidTransition
-from semlayer.monitor import feedback_summary, read_usage
+from semlayer.core import KINDS, InvalidTransition, State
+from semlayer.monitor import (
+    feedback_summary,
+    read_usage,
+    recommend_materialized_views,
+    run_canary,
+)
 from semlayer.registry import Registry
 from semlayer.warehouse.bigquery import render_sql
 
@@ -548,24 +554,24 @@ def _system_view(wh_dialect: str, bq_proj: str, bq_ds: str, cert_count: int,
         f"<circle r='3.5' fill='#fbbf24' data-stack='loop'><animateMotion dur='6.5s' repeatCount='indefinite'><mpath href='#p-feedback'/></animateMotion></circle>"
 
         # PLANE 1 NODES
-        f"<g class='arch-node' data-stack='core loop' data-title='Ingest &amp; Column Lineage (src/semlayer/ingest, lineage)' "
-        f"data-detail='Snapshots warehouse schema via Warehouse.schema(), parses query_log.jsonl + dbt manifest.json, and extracts column-level lineage with sqlglot.' data-adr='ADR-001 · ADR-012'>"
+        f"<g class='arch-node' data-stack='core loop' data-title='Ingest, BQ Jobs &amp; Dataplex Policy Tags (src/semlayer/ingest, lineage)' "
+        f"data-detail='Snapshots warehouse schema, ingests query_log.jsonl OR BigQuery INFORMATION_SCHEMA.JOBS_BY_PROJECT (--from-bq-jobs, domain-stripped owners), reads Dataplex COLUMN_FIELD_PATHS policy tags, and extracts sqlglot lineage.' data-adr='ADR-001 · ADR-012 · ADR-036'>"
         f"<rect x='34' y='54' width='282' height='58' rx='8' fill='#181514' stroke='#332d2a'/>"
-        f"<text x='48' y='77' fill='#f5f4f2' font-size='13' font-weight='700'>Query Log + Schema + dbt Docs</text>"
-        f"<text x='48' y='96' fill='#a8a29e' font-size='11' font-family='monospace'>schema_snapshot · sqlglot lineage</text></g>"
+        f"<text x='48' y='77' fill='#f5f4f2' font-size='12.5' font-weight='700'>Query Log / BQ JOBS + Policy Tags</text>"
+        f"<text x='48' y='96' fill='#a8a29e' font-size='10.5' font-family='monospace'>schema · JOBS_BY_PROJECT · sqlglot</text></g>"
 
-        f"<g class='arch-node' data-stack='core loop' data-title='Draft &amp; Structural Conflict Engine (src/semlayer/draft, conflicts)' "
-        f"data-detail='Clusters single-table aggregates (sum, count, count_distinct, avg, min, max), suggests owners &amp; sensitive-dim rules, and flags variants/duplicates for Split or Pick.' data-adr='ADR-012 · ADR-013'>"
+        f"<g class='arch-node' data-stack='core loop' data-title='Draft &amp; Structural Conflict Engine (src/semlayer/draft, conflicts, policy)' "
+        f"data-detail='Clusters single-table aggregates, drafts FK entity edges (with cardinality), merges Dataplex policy tags + regex PII into deny_dims rules, and flags variants/duplicates for Split or Pick.' data-adr='ADR-012 · ADR-013 · ADR-036'>"
         f"<rect x='34' y='150' width='282' height='82' rx='8' fill='#181514' stroke='#e8652b' stroke-opacity='0.55'/>"
         f"<text x='48' y='173' fill='#f5f4f2' font-size='13' font-weight='700'>Draft Engine &amp; Conflict Detector</text>"
-        f"<text x='48' y='192' fill='#a8a29e' font-size='11' font-family='monospace'>metrics · FK graph · sensitive rules</text>"
+        f"<text x='48' y='192' fill='#a8a29e' font-size='10.5' font-family='monospace'>metrics · FK cardinality · Dataplex PII</text>"
         f"<text x='48' y='211' fill='#fbbf24' font-size='11' font-family='monospace'>variants / duplicates → Split · Pick</text></g>"
 
-        f"<g class='arch-node' data-stack='gcp' data-title='Primary LLM · Gemini API via AI Studio (src/semlayer/core/llm.py)' "
-        f"data-detail='Default llm_provider: gemini (gemini-3.5-flash-lite) over OpenAI-compatible endpoint using GEMINI_API_KEY (.env). 15 RPM pacer + HTTP 429 Retry-After backoff; words descriptions only.' data-adr='ADR-024 · ADR-029'>"
+        f"<g class='arch-node' data-stack='gcp' data-title='Primary LLM · Gemini API via AI Studio + Secret Manager (src/semlayer/core/llm.py)' "
+        f"data-detail='Default llm_provider: gemini (gemini-3.5-flash-lite) using GEMINI_API_KEY (.env locally or GCP Secret Manager on Cloud Run). 15 RPM pacer + HTTP 429 Retry-After backoff; words descriptions only.' data-adr='ADR-024 · ADR-029 · ADR-037'>"
         f"<rect x='34' y='302' width='282' height='78' rx='8' fill='#0f1c26' stroke='#38bdf8' stroke-opacity='0.75'/>"
         f"<text x='48' y='325' fill='#38bdf8' font-size='12.5' font-weight='700'>Gemini API · AI Studio (Primary LLM)</text>"
-        f"<text x='48' y='344' fill='#e2e8f0' font-size='11' font-family='monospace'>gemini-3.5-flash-lite · GEMINI_API_KEY</text>"
+        f"<text x='48' y='344' fill='#e2e8f0' font-size='10.5' font-family='monospace'>gemini-3.5-flash-lite · Secret Manager</text>"
         f"<text x='48' y='362' fill='#94a3b8' font-size='10.5' font-family='monospace'>15 RPM · 429 Retry-After · wording</text></g>"
 
         f"<g class='arch-node' data-stack='local' data-title='Secondary LLM · Local Ollama / OpenAI-Compat (src/semlayer/core/llm.py)' "
@@ -576,107 +582,110 @@ def _system_view(wh_dialect: str, bq_proj: str, bq_ds: str, cert_count: int,
         f"<text x='48' y='476' fill='#86efac' font-size='10.5' font-family='monospace'>100% local private data &amp; keyless CI</text></g>"
 
         # PLANE 2 NODES
-        f"<g class='arch-node' data-stack='core loop' data-title='Human Certification Gate (Web Console &amp; CLI)' "
-        f"data-detail='Invariant 1 &amp; 6: LLMs propose, humans certify. Requires explicit owner; transitions draft → certified (v+1) or deprecated. Pending revisions never overwrite live vN until approved.' data-adr='ADR-003 · ADR-010 · ADR-030'>"
+        f"<g class='arch-node' data-stack='core loop' data-title='Human Certification Gate (Web Console / Cloud Run IAM / CLI)' "
+        f"data-detail='Invariants 1 &amp; 6: LLMs propose, humans certify. Transitions draft → certified (v+1) ↔ suspended → deprecated. Enforces certified inputs on ratio/derived metrics; drafts, _pending &amp; suspended NEVER served.' data-adr='ADR-003 · ADR-030 · ADR-031 · ADR-033'>"
         f"<rect class='arch-pulse-ring' x='370' y='52' width='340' height='100' rx='10' fill='none' stroke='#e8652b' stroke-width='2'/>"
         f"<rect x='374' y='56' width='332' height='92' rx='8' fill='#241510' stroke='#e8652b' stroke-width='1.5'/>"
         f"<text x='390' y='80' fill='#f2743d' font-size='13.5' font-weight='700'>★ Human Certification Gate (UI / CLI)</text>"
-        f"<text x='390' y='100' fill='#f5f4f2' font-size='11' font-family='monospace'>draft → certified (v+1) → deprecated</text>"
-        f"<text x='390' y='118' fill='#d6d3d1' font-size='11' font-family='monospace'>owner required · filter + diff review</text>"
-        f"<text x='390' y='135' fill='#fbbf24' font-size='10.5' font-family='monospace'>drafts &amp; _pending revisions NEVER served</text></g>"
+        f"<text x='390' y='100' fill='#f5f4f2' font-size='10.5' font-family='monospace'>draft → certified ↔ suspended → deprecated</text>"
+        f"<text x='390' y='118' fill='#d6d3d1' font-size='10.5' font-family='monospace'>owner + certified dep DAG · Cloud Run IAM</text>"
+        f"<text x='390' y='135' fill='#fbbf24' font-size='10.5' font-family='monospace'>drafts, _pending &amp; suspended NEVER served</text></g>"
 
-        f"<g class='arch-node' data-stack='core loop' data-title='YAML Registry + Rebuildable SQLite Index (src/semlayer/registry)' "
-        f"data-detail='Git-diffable YAML files in definitions/{{metrics,entities,edges,rules}} are source of truth; SQLite index.db is rebuildable via reindex; audit.jsonl records actor &amp; edit_ratio.' data-adr='ADR-003 · ADR-023'>"
+        f"<g class='arch-node' data-stack='core loop' data-title='YAML Registry + SQLite FTS5 Search Index (src/semlayer/registry)' "
+        f"data-detail='Git-diffable YAML source of truth + rebuildable SQLite &amp; FTS5 BM25 index (search_metrics over names, concepts, dims &amp; synonyms). Tracks ratio/derived DAG cycles and emits Cloud Logging JSON.' data-adr='ADR-003 · ADR-033 · ADR-035 · ADR-037'>"
         f"<rect x='374' y='186' width='332' height='78' rx='8' fill='#181514' stroke='#38312e'/>"
-        f"<text x='390' y='209' fill='#f5f4f2' font-size='13' font-weight='700'>Certified Registry (YAML + SQLite)</text>"
-        f"<text x='390' y='228' fill='#a8a29e' font-size='11' font-family='monospace'>metrics · entities · edges · rules</text>"
-        f"<text x='390' y='246' fill='#736c67' font-size='10.5' font-family='monospace'>_pending/ revisions · audit.jsonl trail</text></g>"
+        f"<text x='390' y='209' fill='#f5f4f2' font-size='13' font-weight='700'>Certified Registry (YAML + FTS5)</text>"
+        f"<text x='390' y='228' fill='#a8a29e' font-size='10.5' font-family='monospace'>simple · ratio · derived · FTS5 BM25</text>"
+        f"<text x='390' y='246' fill='#736c67' font-size='10.5' font-family='monospace'>audit.jsonl + Cloud Logging stderr JSON</text></g>"
 
-        f"<g class='arch-node' data-stack='core gcp local' data-title='Governed Service, Policy &amp; Compiler (src/semlayer/serve, policy, compiler, graph)' "
-        f"data-detail='The ONLY path to data: verifies certified state, evaluates default-deny RBAC (DENY > ALLOW, row_filter, deny_dims, unrestricted graph gate), and compiles dialect SQL via SimpleCompiler + sqlglot.' data-adr='ADR-002 · ADR-004 · ADR-007 · ADR-014 · ADR-017'>"
+        f"<g class='arch-node' data-stack='core gcp local' data-title='Governed Service, Bound Role &amp; AST Compiler (src/semlayer/serve, compiler, graph)' "
+        f"data-detail='Enforces strict bound --role, resource caps, per-dependency RBAC, M:1 edge joins (blocking 1:N fan-out), time grains/ranges, typed filter ops, and NULLIF multi-metric CTE compilation via sqlglot ASTs.' data-adr='ADR-031 · ADR-032 · ADR-033 · ADR-034'>"
         f"<rect x='374' y='304' width='332' height='88' rx='8' fill='#1b1715' stroke='#e8652b'/>"
-        f"<text x='390' y='327' fill='#f5f4f2' font-size='13' font-weight='700'>Service · Policy · Graph · Compiler</text>"
-        f"<text x='390' y='346' fill='#f2743d' font-size='11' font-family='monospace'>default deny · row_filter · deny_dims</text>"
-        f"<text x='390' y='364' fill='#a8a29e' font-size='11' font-family='monospace'>SimpleCompiler + sqlglot · vN + owner</text>"
+        f"<text x='390' y='327' fill='#f5f4f2' font-size='13' font-weight='700'>Service · Bound RBAC · AST Compiler</text>"
+        f"<text x='390' y='346' fill='#f2743d' font-size='10.5' font-family='monospace'>--role strict · caps · M:1 join guard</text>"
+        f"<text x='390' y='364' fill='#a8a29e' font-size='10.5' font-family='monospace'>QuerySpec · time grains · CTE ratios</text>"
         f"<text x='390' y='381' fill='#34d399' font-size='10.5' font-family='monospace'>Runtime: {e(active_mode)}</text></g>"
 
         f"<g class='arch-node' data-stack='core gcp local' data-title='AI Agent / MCP Client Surface (src/semlayer/serve/mcp_server.py)' "
-        f"data-detail='Agents connect over stdio MCP to list_metrics, describe_metric, query_metric, describe_graph, traverse_graph, report_gap, report_issue. No raw-SQL tool and no warehouse credentials exist.' data-adr='ADR-004 · ADR-008'>"
+        f"data-detail='Agents connect over stdio MCP (or Google ADK McpToolset) to 9 governed tools: list_metrics, search_metrics, describe_metric, query_metric, query_metrics, describe_graph, traverse_graph, report_gap, report_issue.' data-adr='ADR-004 · ADR-032 · ADR-033 · ADR-035'>"
         f"<rect x='374' y='434' width='332' height='74' rx='8' fill='#141211' stroke='#443c38'/>"
-        f"<text x='390' y='457' fill='#f5f4f2' font-size='13' font-weight='700'>AI Agents &amp; Eval Harness (MCP stdio)</text>"
-        f"<text x='390' y='476' fill='#a8a29e' font-size='11' font-family='monospace'>query_metric · traverse_graph · report_gap</text>"
+        f"<text x='390' y='457' fill='#f5f4f2' font-size='13' font-weight='700'>AI Agents &amp; ADK (9 Governed MCP Tools)</text>"
+        f"<text x='390' y='476' fill='#a8a29e' font-size='10.5' font-family='monospace'>search_metrics · query_metric(s) · graph</text>"
         f"<text x='390' y='493' fill='#f87171' font-size='10.5' font-family='monospace'>NO raw-SQL tool · NO warehouse credentials</text></g>"
 
         # PLANE 3A: GCP BIGQUERY MCP NODES
         f"<g class='arch-node' data-stack='gcp' data-title='Google Managed BigQuery MCP Server (src/semlayer/warehouse/bigquery.py)' "
-        f"data-detail='Streamable HTTP MCP client to https://bigquery.googleapis.com/mcp with Google ADC / SA impersonation and x-goog-user-project. Invokes execute_sql_readonly ONLY with pre-flight dryRun byte cap.' data-adr='ADR-026 · ADR-027 · ADR-028'>"
+        f"data-detail='Streamable HTTP MCP client to https://bigquery.googleapis.com/mcp with ADC / SA impersonation. Invokes execute_sql_readonly ONLY with dryRun byte cap, ISOWEEK DATE_TRUNC, and sqlglot AST literals.' data-adr='ADR-026 · ADR-027 · ADR-028 · ADR-032'>"
         f"<rect x='764' y='56' width='322' height='88' rx='8' fill='#102030' stroke='#38bdf8'/>"
         f"<text x='778' y='79' fill='#38bdf8' font-size='13' font-weight='700'>BigQuery Managed MCP (HTTPS)</text>"
         f"<text x='778' y='98' fill='#e2e8f0' font-size='11' font-family='monospace'>bigquery.googleapis.com/mcp · ADC OAuth</text>"
-        f"<text x='778' y='116' fill='#7dd3fc' font-size='11' font-family='monospace'>tool: execute_sql_readonly + dryRun cap</text>"
-        f"<text x='778' y='133' fill='#94a3b8' font-size='10.5' font-family='monospace'>sqlglot AST · DATE_SUB · IN UNNEST</text></g>"
+        f"<text x='778' y='116' fill='#7dd3fc' font-size='10.5' font-family='monospace'>execute_sql_readonly + dryRun byte cap</text>"
+        f"<text x='778' y='133' fill='#94a3b8' font-size='10.5' font-family='monospace'>sqlglot AST · ISOWEEK · CTE FULL JOIN</text></g>"
 
-        f"<g class='arch-node' data-stack='gcp' data-title='BigQuery Dataset on GCP ({e(bq_proj)}.{e(bq_ds)})' "
-        f"data-detail='Cloud tables (customers, orders, payments) seeded via scripts/bq_seed.py (bq load). DML/DDL blocked by execute_sql_readonly; incomplete or truncated (>3,000 row) jobs fail closed.' data-adr='ADR-025 · ADR-028'>"
+        f"<g class='arch-node' data-stack='gcp' data-title='BigQuery + Dataplex + Cloud Run Ops ({e(bq_proj)}.{e(bq_ds)})' "
+        f"data-detail='Read-only tables, INFORMATION_SCHEMA.JOBS_BY_PROJECT query history, Dataplex policy tags, Cloud Run IAM console + scheduled Canary Job, and Materialized View DDL advisor.' data-adr='ADR-025 · ADR-036 · ADR-037 · ADR-038'>"
         f"<rect x='764' y='184' width='322' height='92' rx='8' fill='#0d1824' stroke='#1e496b'/>"
-        f"<text x='778' y='207' fill='#f5f4f2' font-size='13' font-weight='700'>BigQuery Dataset (Read-Only)</text>"
+        f"<text x='778' y='207' fill='#f5f4f2' font-size='12.5' font-weight='700'>BigQuery + Dataplex + Cloud Run Ops</text>"
         f"<text x='778' y='226' fill='#38bdf8' font-size='11' font-family='monospace'>{e(bq_target)}</text>"
-        f"<text x='778' y='245' fill='#94a3b8' font-size='10.5' font-family='monospace'>customers · orders · payments (bq load)</text>"
-        f"<text x='778' y='263' fill='#34d399' font-size='10.5' font-family='monospace'>Verified: 33/33 oracle · 33/33 Gemini</text></g>"
+        f"<text x='778' y='245' fill='#94a3b8' font-size='10.5' font-family='monospace'>JOBS_BY_PROJECT · Policy Tags · MV DDL</text>"
+        f"<text x='778' y='263' fill='#34d399' font-size='10.5' font-family='monospace'>Cloud Run IAM · Canary Job · 33/33 eval</text></g>"
 
         # PLANE 3B: LOCAL DUCKDB NODE
         f"<g class='arch-node' data-stack='local' data-title='DuckDB Local Read-Only Warehouse (src/semlayer/warehouse/__init__.py)' "
-        f"data-detail='Default zero-config embedded warehouse (read_only=True). Executes compiled SQL with DB-API bound ? parameters, list_contains(?, key), and zero network calls.' data-adr='ADR-009 · Phase 9'>"
+        f"data-detail='Default zero-config embedded warehouse (read_only=True). Executes AST-compiled SQL, multi-metric CTEs, ISO week truncation, and M:1 joins with bound ? parameters and zero network calls.' data-adr='ADR-009 · ADR-032'>"
         f"<rect x='764' y='356' width='322' height='148' rx='8' fill='#0e1f18' stroke='#34d399'/>"
         f"<text x='778' y='382' fill='#34d399' font-size='13' font-weight='700'>DuckDBWarehouse (Local Default)</text>"
         f"<text x='778' y='403' fill='#e2e8f0' font-size='11' font-family='monospace'>examples/jaffle_shop/jaffle.duckdb</text>"
         f"<text x='778' y='424' fill='#a7f3d0' font-size='11' font-family='monospace'>read_only=True · bound ? parameters</text>"
-        f"<text x='778' y='444' fill='#86efac' font-size='10.5' font-family='monospace'>list_contains(?, entity_key)</text>"
+        f"<text x='778' y='444' fill='#86efac' font-size='10.5' font-family='monospace'>DATE_TRUNC · CTE ratios · M:1 joins</text>"
         f"<text x='778' y='464' fill='#94a3b8' font-size='10.5' font-family='monospace'>Lazy file open · instant offline CI</text>"
-        f"<text x='778' y='484' fill='#34d399' font-size='10.5' font-family='monospace'>Verified: 89/89 offline pytest suite</text></g>"
+        f"<text x='778' y='484' fill='#34d399' font-size='10.5' font-family='monospace'>Verified: 104/104 offline pytest suite</text></g>"
 
-        # PLANE 4: DRIFT & FEEDBACK BAR
-        f"<g class='arch-node' data-stack='loop' data-title='Continuous Drift &amp; Feedback Monitor (src/semlayer/monitor)' "
-        f"data-detail='Detects schema changes, new query-log patterns, and z-score value anomalies, opening debounced _pending revisions without breaking live vN metrics; clusters agent report_gap calls.' data-adr='ADR-019 · Phase 4'>"
-        f"<rect x='204' y='542' width='480' height='52' rx='8' fill='#1f190e' stroke='#fbbf24' stroke-opacity='0.75'/>"
-        f"<text x='220' y='564' fill='#fbbf24' font-size='12.5' font-weight='700'>PLANE 4 · Monitor, Drift &amp; Feedback Loop</text>"
-        f"<text x='220' y='582' fill='#fde68a' font-size='10.5' font-family='monospace'>schema/pattern/value drift + gap clusters → _pending (vN→vN+1)</text></g>"
+        # PLANE 4: DRIFT, CANARY & FEEDBACK BAR
+        f"<g class='arch-node' data-stack='loop' data-title='Canary Probes, Drift Monitor &amp; MV Advisor (src/semlayer/monitor)' "
+        f"data-detail='semlayer canary runs LIMIT 0 probes and suspends broken metrics (cascading to derived dependents); drift opens _pending revisions; feedback clusters gaps and emits BigQuery MV DDL.' data-adr='ADR-019 · ADR-031 · ADR-038'>"
+        f"<rect x='194' y='542' width='512' height='52' rx='8' fill='#1f190e' stroke='#fbbf24' stroke-opacity='0.75'/>"
+        f"<text x='210' y='564' fill='#fbbf24' font-size='12.5' font-weight='700'>PLANE 4 · Canary Health, Drift &amp; BigQuery MV Advisor</text>"
+        f"<text x='210' y='582' fill='#fde68a' font-size='10.5' font-family='monospace'>canary LIMIT 0 → suspended · drift → _pending · MV DDL</text></g>"
 
         f"</svg>"
         f"<div class='arch-inspector'>"
         f"<span id='arch-ins-title' class='arch-ins-title'>Hover or click any node to inspect module &amp; invariants</span>"
-        f"<span id='arch-ins-detail' class='arch-ins-detail'>Use the stack pills above to isolate the GCP Cloud path (AI Studio Gemini + BigQuery MCP), the Local Offline path (Ollama + DuckDB), or the Drift &amp; Certification loop.</span>"
-        f"<span id='arch-ins-adr' class='badge badge-orange'>ADR-001 → ADR-030</span>"
+        f"<span id='arch-ins-detail' class='arch-ins-detail'>Use the stack pills above to isolate the GCP Cloud path (Gemini + BigQuery MCP + Cloud Run), the Local Offline path (Ollama + DuckDB), or the Canary &amp; Drift loop.</span>"
+        f"<span id='arch-ins-adr' class='badge badge-orange'>ADR-001 → ADR-038</span>"
         f"</div></div></section>"
 
         f"<section id='sys-planes'><h2>Four architectural planes</h2>"
         f"<div class='card-grid'>"
         f"<div class='card'><div class='card-head'><span class='card-title'>1. Ingest, Draft &amp; Conflict Plane</span><span class='badge badge-orange'>Propose</span></div>"
-        f"<div style='color:var(--text-secondary);font-size:13px'>Extracts single-table aggregate candidates, FK entity graphs, and sensitive-column deny rules from query logs + schema. Gemini (primary) or Ollama (secondary) writes human-readable descriptions that include filter predicates, never touching SQL expressions.</div></div>"
-        f"<div class='card'><div class='card-head'><span class='card-title'>2. Certification &amp; Policy Core</span><span class='badge badge-ok'>Enforce</span></div>"
-        f"<div style='color:var(--text-secondary);font-size:13px'>YAML-backed state machine (<code>draft → certified → deprecated</code>) requiring human ownership. Every MCP call passes default-deny RBAC, explicit <code>DENY &gt; ALLOW</code>, row-level predicates, denied-dimension checks, and allow-all graph traversal gates.</div></div>"
-        f"<div class='card'><div class='card-head'><span class='card-title'>3. Dual Warehouse Execution</span><span class='badge' style='color:#38bdf8;border-color:#1e496b'>GCP + Local</span></div>"
-        f"<div style='color:var(--text-secondary);font-size:13px'><code>Warehouse</code> protocol abstracts local <code>DuckDBWarehouse</code> (bound parameters) and remote <code>BigQueryMCP</code> (Streamable HTTP to <code>bigquery.googleapis.com/mcp</code>, <code>execute_sql_readonly</code> + <code>dryRun</code> byte cap + <code>sqlglot</code> AST literal binding).</div></div>"
-        f"<div class='card'><div class='card-head'><span class='card-title'>4. Drift &amp; Feedback Loop</span><span class='badge badge-warn'>Observe</span></div>"
-        f"<div style='color:var(--text-secondary);font-size:13px'>Breaking schema changes open debounced <code>_pending/</code> revisions while live <code>vN</code> metrics fail closed if queried on dropped columns. Role-only <code>usage.jsonl</code> aggregates demand, error rates, and clustered agent coverage gaps.</div></div>"
+        f"<div style='color:var(--text-secondary);font-size:13px'>Ingests local JSONL logs or BigQuery <code>INFORMATION_SCHEMA.JOBS_BY_PROJECT</code> plus Dataplex policy tags. Drafts metrics, FK cardinality edges, and PII <code>deny_dims</code> rules while Gemini or Ollama writes filter-aware descriptions.</div></div>"
+        f"<div class='card'><div class='card-head'><span class='card-title'>2. Certification, Bound RBAC &amp; AST Compiler</span><span class='badge badge-ok'>Enforce</span></div>"
+        f"<div style='color:var(--text-secondary);font-size:13px'>YAML + SQLite FTS5 registry (<code>draft → certified ↔ suspended → deprecated</code>). Enforces strict <code>serve --role</code> binding, per-dependency RBAC, safe M:1 joins (blocking 1:N fan-out), time grains/ranges, and multi-metric CTEs.</div></div>"
+        f"<div class='card'><div class='card-head'><span class='card-title'>3. Dual Warehouse &amp; Cloud Run Execution</span><span class='badge' style='color:#38bdf8;border-color:#1e496b'>GCP + Local</span></div>"
+        f"<div style='color:var(--text-secondary);font-size:13px'>Runs identically on embedded <code>DuckDBWarehouse</code> (bound parameters) or Google's managed <code>BigQueryMCP</code> (<code>execute_sql_readonly</code> + <code>dryRun</code> byte cap + <code>sqlglot</code> AST rendering), deployable on Cloud Run with Secret Manager.</div></div>"
+        f"<div class='card'><div class='card-head'><span class='card-title'>4. Canary Health, Drift &amp; MV Advisor</span><span class='badge badge-warn'>Observe</span></div>"
+        f"<div style='color:var(--text-secondary);font-size:13px'>Scheduled <code>semlayer canary</code> probes certified metrics with <code>LIMIT 0</code> and suspends broken definitions automatically; Cloud Logging stderr JSON powers alerts; <code>feedback --recommend-mv</code> emits BigQuery MV DDL.</div></div>"
         f"</div></section>"
 
         f"<section id='sys-matrix'><h2>GCP Cloud vs. Local stack comparison</h2>"
-        f"<div class='table-wrap'><table><tr><th>Subsystem</th><th>GCP Cloud Mode (Primary LLM / Cloud Warehouse)</th><th>Local / Offline Mode (Secondary LLM / Default Warehouse)</th></tr>"
-        f"<tr><td><b class='def-name'>LLM Provider</b></td><td><code>llm_provider: gemini</code> · <code>gemini-3.5-flash-lite</code> via AI Studio (<code>GEMINI_API_KEY</code> in <code>.env</code>, 15 RPM pacing, <code>429 Retry-After</code>)</td><td><code>llm_provider: ollama | openai | none</code> · <code>qwen3.5:9b</code> on <code>localhost:11434</code> or deterministic heuristics (<code>--no-llm</code>)</td></tr>"
+        f"<div class='table-wrap'><table><tr><th>Subsystem</th><th>GCP Cloud Mode (Primary LLM / Cloud Warehouse / Cloud Run)</th><th>Local / Offline Mode (Secondary LLM / Default Warehouse)</th></tr>"
+        f"<tr><td><b class='def-name'>LLM Provider</b></td><td><code>llm_provider: gemini</code> · <code>gemini-3.5-flash-lite</code> via AI Studio (<code>GEMINI_API_KEY</code> in Secret Manager or <code>.env</code>, 15 RPM pacing, <code>429 Retry-After</code>)</td><td><code>llm_provider: ollama | openai | none</code> · <code>qwen3.5:9b</code> on <code>localhost:11434</code> or deterministic heuristics (<code>--no-llm</code>)</td></tr>"
+        f"<tr><td><b class='def-name'>Query &amp; PII Ingestion</b></td><td><code>semlayer ingest --from-bq-jobs</code> (<code>JOBS_BY_PROJECT</code> with domain-stripped owners) + Dataplex policy tags (<code>COLUMN_FIELD_PATHS</code> → auto <code>deny_dims</code>)</td><td>Local <code>query_log.jsonl</code> / <code>.sql</code> + <code>dbt manifest.json</code> + column-name regex sensitivity heuristics</td></tr>"
         f"<tr><td><b class='def-name'>Warehouse Adapter</b></td><td><code>BigQueryMCP</code> → <code>https://bigquery.googleapis.com/mcp</code> over Streamable HTTP (<code>execute_sql_readonly</code> only)</td><td><code>DuckDBWarehouse</code> → embedded <code>jaffle.duckdb</code> opened with <code>read_only=True</code></td></tr>"
-        f"<tr><td><b class='def-name'>Authentication</b></td><td>Google ADC (<code>gcloud auth login --update-adc</code>) or read-only SA impersonation + <code>x-goog-user-project</code>; agents hold zero GCP tokens</td><td>Local filesystem permissions; zero API keys or cloud accounts required (CI default)</td></tr>"
-        f"<tr><td><b class='def-name'>SQL &amp; Injection Safety</b></td><td><code>sqlglot</code> AST literal substitution (scalars/flat lists, null-byte &amp; non-finite float rejection, <code>DATE_SUB</code>, <code>IN UNNEST</code>, post-render re-parse)</td><td>DB-API bound <code>?</code> parameters + regex identifier allow-list + <code>list_contains(?, key)</code></td></tr>"
-        f"<tr><td><b class='def-name'>Execution Safeguards</b></td><td>Pre-flight <code>dryRun: true</code> byte cap (<code>bq_max_bytes</code>), DML blocked server-side, incomplete or paginated/truncated jobs refused</td><td><code>MAX_ROWS = 1000</code> fetch cap, read-only file descriptor, errors fail closed</td></tr>"
+        f"<tr><td><b class='def-name'>Compiler &amp; Analytics</b></td><td><code>sqlglot</code> AST <code>QuerySpec</code>: <code>ISOWEEK</code> / <code>DATE_TRUNC</code>, typed operators, <code>NULLIF</code> ratio/derived CTEs (<code>FULL OUTER JOIN IS NOT DISTINCT FROM</code>), M:1 joins</td><td>Identical <code>QuerySpec</code> AST semantics compiled to DuckDB with bound <code>?</code> parameters and <code>list_contains(?, key)</code></td></tr>"
+        f"<tr><td><b class='def-name'>Ops, Auth &amp; Telemetry</b></td><td>Cloud Run IAM (<code>--no-allow-unauthenticated</code>), strict <code>--role</code> binding, Cloud Scheduler <code>canary</code> Job, Cloud Logging JSON on <code>stderr</code>, BigQuery MV DDL advisor</td><td><code>127.0.0.1</code> console, strict <code>--role</code> CLI flag, local <code>audit.jsonl</code> / <code>usage.jsonl</code>, 104/104 keyless offline CI tests</td></tr>"
         f"</table></div></section>"
 
         f"<section id='sys-invariants'><h2>Enforced runtime invariants</h2>"
         f"<div class='table-wrap'><table><tr><th>#</th><th>Invariant</th><th>Enforcement Module</th></tr>"
-        f"<tr><td class='mono'>1</td><td>Drafts, <code>_pending</code> revisions, and deprecated definitions are never served to agents.</td><td><code>serve/service.py</code> · <code>registry/registry.py</code></td></tr>"
+        f"<tr><td class='mono'>1</td><td>Drafts, <code>_pending</code> revisions, <code>suspended</code>, and <code>deprecated</code> definitions are never served to agents.</td><td><code>serve/service.py</code> · <code>registry/registry.py</code></td></tr>"
         f"<tr><td class='mono'>2</td><td>Every metric answer carries certified <code>metric</code> name, <code>version</code>, and <code>owner</code>.</td><td><code>serve/service.py</code></td></tr>"
-        f"<tr><td class='mono'>3</td><td>Default deny RBAC: certified rules only, <code>DENY</code> beats <code>ALLOW</code>, row filters &amp; denied dims enforced on every call.</td><td><code>policy/__init__.py</code></td></tr>"
-        f"<tr><td class='mono'>4</td><td>No raw-SQL MCP tool exists; <code>BigQueryMCP</code> calls only <code>execute_sql_readonly</code>.</td><td><code>serve/mcp_server.py</code> · <code>warehouse/bigquery.py</code></td></tr>"
-        f"<tr><td class='mono'>5</td><td>Sensitive column values (<code>policy.SENSITIVE</code>) are stripped from LLM evaluation prompts; quota/transport errors abort eval runs.</td><td><code>evaluate.py</code> · <code>core/llm.py</code></td></tr>"
+        f"<tr><td class='mono'>3</td><td>Strict <code>serve --role</code> rejects caller-supplied <code>as_role</code>; default-deny RBAC, <code>row_filter</code>, and <code>deny_dims</code> apply to every metric and transitive ratio/derived input.</td><td><code>serve/service.py</code> · <code>policy/__init__.py</code></td></tr>"
+        f"<tr><td class='mono'>4</td><td>Cross-entity dimensions join only along unique shortest <code>many_to_one</code> / <code>one_to_one</code> paths; <code>one_to_many</code> fan-out joins are refused.</td><td><code>graph/__init__.py</code> · <code>serve/service.py</code></td></tr>"
+        f"<tr><td class='mono'>5</td><td>Multi-metric &amp; ratio queries aggregate each leaf metric in its own CTE before joining on grain dimensions (zero cross-multiplication) with <code>NULLIF(..., 0)</code> division.</td><td><code>compiler/__init__.py</code></td></tr>"
+        f"<tr><td class='mono'>6</td><td>No raw-SQL MCP tool exists; <code>BigQueryMCP</code> calls only <code>execute_sql_readonly</code> with pre-flight <code>dryRun</code> byte caps and AST-bound literals.</td><td><code>serve/mcp_server.py</code> · <code>warehouse/bigquery.py</code></td></tr>"
+        f"<tr><td class='mono'>7</td><td><code>semlayer canary</code> probes certified metrics with <code>LIMIT 0</code> and cascades failures into <code>suspended</code>; Cloud Logging JSON writes strictly to <code>stderr</code>.</td><td><code>monitor/__init__.py</code> · <code>core/config.py</code></td></tr>"
+        f"<tr><td class='mono'>8</td><td>Sensitive &amp; Dataplex policy-tagged column values are stripped from LLM prompts; quota/transport errors abort eval runs immediately.</td><td><code>evaluate.py</code> · <code>policy/__init__.py</code></td></tr>"
         f"</table></div></section>"
         f"</main></div>"
     )
@@ -722,6 +731,7 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
         )
 
         cert_metrics = reg.certified("metric")
+        susp_metrics = reg.list("metric", State.suspended)
         cert_entities = reg.certified("entity")
         cert_edges = reg.certified("edge")
         cert_rules = reg.certified("rule")
@@ -733,14 +743,29 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
         cert_rows = []
         for m in cert_metrics:
             duck_sql, bq_sql = _compiled_preview(m, cert_by_name, bq_proj, bq_ds)
+            type_badge = (
+                f' <span class="badge badge-orange">{e(m.metric_type)}</span>'
+                if m.metric_type != "simple"
+                else ""
+            )
+            extra_meta = []
+            if m.time_dimension:
+                extra_meta.append(f"time: {m.time_dimension}")
+            if m.synonyms:
+                extra_meta.append(f"synonyms: {', '.join(m.synonyms)}")
+            extra_html = (
+                f'<div class="meta-row"><span><code>{e(" · ".join(extra_meta))}</code></span></div>'
+                if extra_meta
+                else ""
+            )
             cert_rows.append(
                 f'<tr data-filterable>'
-                f'<td><b class="def-name">{e(m.name)}</b> <span class="badge badge-ok">v{m.version}</span>'
+                f'<td><b class="def-name">{e(m.name)}</b> <span class="badge badge-ok">v{m.version}</span>{type_badge}'
                 f'<div class="meta-row"><span>owner: <code>{e(m.owner or "-")}</code></span></div></td>'
                 f'<td><code class="sql-chip">{e(_summary(m))}</code>'
                 f'<div class="desc-text">{e(m.description or "(no description)")}</div></td>'
                 f'<td><code>{e(", ".join(m.dimensions) or "-")}</code>'
-                f'<div class="meta-row"><span>entity: <code>{e(m.entity or "-")}</code></span></div></td>'
+                f'<div class="meta-row"><span>entity: <code>{e(m.entity or "-")}</code></span></div>{extra_html}</td>'
                 f'<td><details><summary>compiled SQL (DuckDB &amp; BigQuery)</summary>'
                 f'<div class="meta-row"><span>DuckDB (parameterised):</span></div><pre>{e(duck_sql)}</pre>'
                 f'<div class="meta-row"><span>BigQuery MCP (sqlglot AST):</span></div><pre>{e(bq_sql)}</pre>'
@@ -749,8 +774,27 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
             )
         cert_section = (
             f'<div class="table-wrap"><table><tr><th>metric</th><th>expression &amp; description</th>'
-            f'<th>dimensions / entity</th><th>dialect SQL &amp; lineage</th></tr>{"".join(cert_rows)}</table></div>'
+            f'<th>dimensions / time / entity</th><th>dialect SQL &amp; lineage</th></tr>{"".join(cert_rows)}</table></div>'
             if cert_rows else '<p class="empty-note">None certified yet</p>'
+        )
+
+        susp_rows = "".join(
+            f'<tr id="metric-{e(sm.name)}" data-filterable>'
+            f'<td><b class="def-name">{e(sm.name)}</b> <span class="badge badge-err">suspended</span></td>'
+            f'<td><code class="sql-chip">{e(_summary(sm))}</code></td>'
+            f'<td><code style="color:var(--err)">{e(sm.suspend_reason or "canary failed")}</code></td>'
+            f'<td><form class="act-inline" method="post" action="/certify/metric/{e(sm.name)}">'
+            f'<input type="hidden" name="owner" value="{e(sm.owner or "data-team")}">'
+            f'<button class="btn-primary" type="submit">re-certify</button></form></td></tr>'
+            for sm in susp_metrics
+        )
+        susp_section = (
+            f"<section id='sec-suspended'><h2>Suspended metrics <span class='badge badge-err'>{len(susp_metrics)}</span></h2>"
+            f"<p class='sec-sub'>Automatically quarantined by <code>semlayer canary</code> (never served to agents until fixed and re-certified).</p>"
+            f"<div class='table-wrap'><table><tr><th>metric</th><th>logic</th><th>suspend reason</th><th>action</th></tr>"
+            f"{susp_rows}</table></div></section>"
+            if susp_metrics
+            else ""
         )
 
         ent_rows = "".join(
@@ -763,7 +807,7 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
         edge_rows = "".join(
             f'<tr data-filterable><td><span class="badge badge-orange">{e(ed.rel)}</span></td>'
             f'<td><code>{e(ed.src)}.{e(ed.src_key)}</code> → <code>{e(ed.dst)}.{e(ed.dst_key)}</code></td>'
-            f'<td><code>{e(", ".join(ed.evidence.lineage) or "-")}</code></td>'
+            f'<td><span class="badge">{e(ed.cardinality)}</span></td>'
             f'<td><span class="badge badge-ok">v{ed.version}</span></td></tr>'
             for ed in cert_edges
         )
@@ -777,10 +821,22 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
             for r in cert_rules
         ) or '<tr><td colspan=6><i>No certified rules — default deny blocks all queries.</i></td></tr>'
 
-        fb = feedback_summary(read_usage(reg), min_volume=1)
+        usage_events = read_usage(reg)
+        fb = feedback_summary(usage_events, min_volume=1)
         demand_str = ", ".join(f"{m} ({n})" for m, n in fb["demand"][:6]) or "none yet"
         gaps_str = ", ".join(f'"{g}" ({n})' for g, n in fb["missing"][:5]) or "none reported"
         flagged_str = ", ".join(fb["flagged"]) or "none"
+        mv_recs = [
+            r for r in recommend_materialized_views(reg, usage_events, project=bq_proj, dataset=bq_ds, min_volume=1)
+            if r.get("eligible") and r.get("ddl")
+        ]
+        mv_html = (
+            f"<details style='margin-top:12px'><summary>BigQuery Materialized View Advisor ({len(mv_recs)} eligible hot metric(s))</summary>"
+            + "".join(f"<pre>{e(r['ddl'])}</pre>" for r in mv_recs[:3])
+            + "</details>"
+            if mv_recs
+            else ""
+        )
 
         audits = list(reversed(reg.audit()[-12:]))
         audit_rows = "".join(
@@ -808,6 +864,22 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
             hidden=(active_tab != "system"),
         )
 
+        bound_badge = (
+            f"<span class='badge badge-ok'>role: {e(svc.bound_role)} (strict)</span>"
+            if svc.bound_role
+            else ""
+        )
+        role_field_q = (
+            f"<div class='form-row'><label>Bound role</label><input value='{e(svc.bound_role)}' disabled></div>"
+            if svc.bound_role
+            else f"<div class='form-row'><label>As role</label><select name='as_role'>{role_opts}</select></div>"
+        )
+        role_field_t = (
+            f"<div class='form-row'><label>Bound role</label><input value='{e(svc.bound_role)}' disabled></div>"
+            if svc.bound_role
+            else f"<div class='form-row'><label>As role</label><select name='as_role'>{role_opts}</select></div>"
+        )
+
         return (
             f"<!doctype html><html lang='en'><head><meta charset='utf-8'>"
             f"<meta name='viewport' content='width=device-width,initial-scale=1'>"
@@ -831,14 +903,14 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
             f"<div class='search-pill'><span style='color:var(--text-muted)'>⌕</span>"
             f"<input id='global-search' type='search' placeholder='Filter metrics, SQL, lineage, rules...'>"
             f"<span class='kbd'>Ctrl K</span></div>"
-            f"<span class='badge badge-orange'>{e(wh_badge)}</span>"
+            f"{bound_badge}<span class='badge badge-orange'>{e(wh_badge)}</span>"
             f"</div></header>"
             f"<div id='view-governance' class='{gov_cls}'>"
             f"<aside class='sidebar'>"
             f"<div class='nav-group'><div class='nav-title'>Governance</div>"
             f"<a class='nav-link active' href='#sec-queue'><span>Review queue</span><span class='nav-count'>{len(q_items)}</span></a>"
             f"<a class='nav-link' href='#sec-conflicts'><span>Conflicts (Split / Pick)</span><span class='nav-count'>{len(detected)}</span></a>"
-            f"<a class='nav-link' href='#sec-feedback'><span>Drift &amp; agent signals</span></a></div>"
+            f"<a class='nav-link' href='#sec-feedback'><span>Canary, drift &amp; MV advisor</span></a></div>"
             f"<div class='nav-group'><div class='nav-title'>Certified Catalog</div>"
             f"<a class='nav-link' href='#sec-metrics'><span>Certified metrics</span><span class='nav-count'>{len(cert_metrics)}</span></a>"
             f"<a class='nav-link' href='#sec-graph'><span>Entity graph &amp; edges</span><span class='nav-count'>{len(cert_entities) + len(cert_edges)}</span></a>"
@@ -849,73 +921,86 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
             f"<a class='nav-link' href='#sec-mcp'><span>MCP &amp; REST surface</span></a></div>"
             f"</aside>"
             f"<main class='content'>"
-            f"<div class='eyebrow'>Certification-Gated Semantic Layer</div>"
+            f"<div class='eyebrow'>Certification-Gated Semantic Layer · Lean v2 + GCP</div>"
             f"<h1>ARTH: SemLayer · Review queue</h1>"
-            f"<p class='lead'>LLMs and query-log statistics propose candidate definitions; humans certify ownership, "
-            f"filters, and RBAC rules here before any metric, entity edge, or policy is exposed to agents over MCP.</p>"
+            f"<p class='lead'>LLMs, query logs, and BigQuery <code>JOBS_BY_PROJECT</code> propose candidate definitions; "
+            f"humans certify ownership, filters, ratios, and RBAC rules here before any definition is exposed over MCP.</p>"
             f"<div class='stats'>"
             f"<div class='stat'><div class='stat-k'>Pending review</div><div class='stat-v accent'>{len(q_items)}</div><div class='stat-sub'>drafts &amp; drift revisions</div></div>"
             f"<div class='stat'><div class='stat-k'>Open conflicts</div><div class='stat-v'>{len(detected)}</div><div class='stat-sub'>variants &amp; duplicates</div></div>"
-            f"<div class='stat'><div class='stat-k'>Certified metrics</div><div class='stat-v'>{len(cert_metrics)}</div><div class='stat-sub'>served over MCP</div></div>"
-            f"<div class='stat'><div class='stat-k'>Graph topology</div><div class='stat-v'>{len(cert_entities)} / {len(cert_edges)}</div><div class='stat-sub'>entities / FK edges</div></div>"
-            f"<div class='stat'><div class='stat-k'>Active rules</div><div class='stat-v'>{len(cert_rules)}</div><div class='stat-sub'>default-deny policy</div></div>"
+            f"<div class='stat'><div class='stat-k'>Certified / Suspended</div><div class='stat-v'>{len(cert_metrics)} / {len(susp_metrics)}</div><div class='stat-sub'>served / canary-quarantined</div></div>"
+            f"<div class='stat'><div class='stat-k'>Graph topology</div><div class='stat-v'>{len(cert_entities)} / {len(cert_edges)}</div><div class='stat-sub'>entities / M:1 &amp; 1:N edges</div></div>"
+            f"<div class='stat'><div class='stat-k'>Active rules</div><div class='stat-v'>{len(cert_rules)}</div><div class='stat-sub'>default-deny + Dataplex PII</div></div>"
             f"<div class='stat'><div class='stat-k'>Warehouse dialect</div><div class='stat-v'>{e(wh_dialect)}</div><div class='stat-sub'>execute_sql_readonly</div></div>"
             f"</div>"
             f"<section id='sec-queue'>"
             f"<div class='table-wrap'><table><tr><th>definition</th><th>logic &amp; description</th><th>usage</th>"
             f"<th>evidence &amp; diff</th><th>action</th></tr>{rows or empty}</table></div></section>"
+            f"{susp_section}"
             f"<section id='sec-conflicts'><h2>Conflicts</h2>"
             f"<p class='sec-sub'>Structural variant clusters (same concept name, different SQL filter/agg) and duplicate logic under distinct aliases.</p>"
             f"{conflicts_html}</section>"
             f"<section id='sec-metrics'><h2>Certified metrics</h2>"
-            f"<p class='sec-sub'>Live governed definitions exposed to agents via <code>list_metrics</code>, <code>describe_metric</code>, and <code>query_metric</code>.</p>"
+            f"<p class='sec-sub'>Live governed definitions (simple, ratio, derived) exposed via <code>list_metrics</code>, <code>search_metrics</code>, <code>describe_metric</code>, and <code>query_metric(s)</code>.</p>"
             f"{cert_section}</section>"
             f"<section id='sec-graph'><h2>Entity graph &amp; foreign-key edges</h2>"
-            f"<p class='sec-sub'>Certified join topology powering multi-hop <code>describe_graph</code> → <code>traverse_graph</code> → <code>entity_keys</code> queries.</p>"
+            f"<p class='sec-sub'>Certified join topology powering safe M:1 dimension joins (blocking 1:N fan-out) and multi-hop <code>traverse_graph</code> entity-set filters.</p>"
             f"<div class='card-grid'>"
             f"<div class='table-wrap'><table><tr><th>entity</th><th>table</th><th>PK</th><th>owner</th></tr>"
             f"{ent_rows or '<tr><td colspan=4><i>No certified entities</i></td></tr>'}</table></div>"
-            f"<div class='table-wrap'><table><tr><th>relationship</th><th>join condition</th><th>lineage</th><th>ver</th></tr>"
+            f"<div class='table-wrap'><table><tr><th>relationship</th><th>join condition</th><th>cardinality</th><th>ver</th></tr>"
             f"{edge_rows or '<tr><td colspan=4><i>No certified edges</i></td></tr>'}</table></div>"
             f"</div></section>"
             f"<section id='sec-policy'><h2>Access policy rules (default deny)</h2>"
-            f"<p class='sec-sub'>Only certified rules apply; explicit <code>DENY</code> overrides <code>ALLOW</code>; restricted dimensions cannot be grouped or filtered.</p>"
+            f"<p class='sec-sub'>Only certified rules apply; explicit <code>DENY</code> overrides <code>ALLOW</code>; restricted &amp; Dataplex policy-tagged dimensions cannot be grouped or filtered.</p>"
             f"<div class='table-wrap'><table><tr><th>rule</th><th>role</th><th>metric</th><th>effect</th><th>row_filter</th><th>deny_dims</th></tr>"
             f"{rule_rows}</table></div></section>"
             f"<section id='sec-playground'><h2>Interactive governed query &amp; graph runner</h2>"
-            f"<p class='sec-sub'>Test policy enforcement, row filters, and compiled SQL through <code>Service</code> (never raw SQL).</p>"
+            f"<p class='sec-sub'>Test time grains, range filters, M:1 joins (<code>Customer.region</code>), ratios, row filters, and compiled SQL through <code>Service</code>.</p>"
             f"<div class='playground-grid'>"
-            f"<div class='card'><div class='card-head'><span class='card-title'>Run <code>query_metric</code></span><span class='badge badge-orange'>MCP tool</span></div>"
+            f"<div class='card'><div class='card-head'><span class='card-title'>Run <code>query_metric</code></span><span class='badge badge-orange'>QuerySpec AST</span></div>"
             f"<form hx-post='/ui/query' hx-target='#runner-output' hx-swap='innerHTML' method='post' action='/ui/query'>"
             f"<div class='form-row'><label>Metric</label><select name='metric'>{metric_opts or '<option value=\"\">(certify a metric first)</option>'}</select></div>"
-            f"<div class='form-row'><label>As role</label><select name='as_role'>{role_opts}</select></div>"
-            f"<div class='form-row'><label>Dimensions</label><input name='dims' placeholder='e.g. method, region'></div>"
-            f"<div class='form-row'><label>Filters</label><input name='filters' placeholder='e.g. method=card, status=completed'></div>"
+            f"{role_field_q}"
+            f"<div class='form-row'><label>Dimensions</label><input name='dims' placeholder='e.g. method, Customer.region'></div>"
+            f"<div class='form-row'><label>Time grain</label><select name='time_grain'>"
+            f"<option value=''>none</option><option value='day'>day</option><option value='week'>week (ISO Mon)</option>"
+            f"<option value='month'>month</option><option value='quarter'>quarter</option><option value='year'>year</option></select></div>"
+            f"<div class='form-row'><label>Time range</label><input name='time_range' placeholder='e.g. last_30_days or 2024-01-01..2024-03-01'></div>"
+            f"<div class='form-row'><label>Filters</label><input name='filters' placeholder='col=val or JSON {{&quot;method&quot;:{{&quot;in&quot;:[&quot;card&quot;]}}}}'></div>"
+            f"<div class='form-row'><label>Order / Limit</label><div class='act-inline' style='flex:1'>"
+            f"<input name='order_by' placeholder='e.g. -revenue' style='flex:1'>"
+            f"<input name='limit' placeholder='limit' style='width:84px'></div></div>"
             f"<div class='form-row'><label>Entity keys</label><input name='entity_keys' placeholder='optional, e.g. 4, 5, 6'></div>"
             f"<button class='btn-primary' type='submit'>execute governed metric</button></form></div>"
             f"<div class='card'><div class='card-head'><span class='card-title'>Run <code>traverse_graph</code></span><span class='badge badge-orange'>MCP tool</span></div>"
             f"<form hx-post='/ui/traverse' hx-target='#runner-output' hx-swap='innerHTML' method='post' action='/ui/traverse'>"
             f"<div class='form-row'><label>Start entity</label><select name='start'>{entity_opts or '<option value=\"Customer\">Customer</option>'}</select></div>"
             f"<div class='form-row'><label>Rel path</label><input name='path' placeholder='e.g. HAS_ORDER'></div>"
-            f"<div class='form-row'><label>As role</label><select name='as_role'>{role_opts}</select></div>"
+            f"{role_field_t}"
             f"<div class='form-row'><label>Entity filter</label><input name='filters' placeholder='e.g. Order.status=returned'></div>"
-            f"<button class='btn-primary' type='submit'>traverse entity keys</button></form></div>"
+            f"<button class='btn-primary' type='submit'>traverse entity keys</button></form>"
+            f"<div style='margin-top:16px;padding-top:14px;border-top:1px solid var(--border)'>"
+            f"<div class='card-head'><span class='card-title'>Canary Health Probe (<code>LIMIT 0</code>)</span><span class='badge badge-warn'>ADR-031</span></div>"
+            f"<form hx-post='/ui/canary' hx-target='#runner-output' hx-swap='innerHTML' method='post' action='/ui/canary' class='act-inline'>"
+            f"<label style='font-size:12px;color:var(--text-secondary)'><input type='checkbox' name='dry_run' value='1' checked> dry-run</label>"
+            f"<button type='submit'>run canary probe</button></form></div></div>"
             f"</div><div id='runner-output' style='margin-top:14px'></div></section>"
-            f"<section id='sec-feedback'><h2>Drift &amp; agent feedback signals</h2>"
+            f"<section id='sec-feedback'><h2>Drift, feedback &amp; BigQuery Materialized View advisor</h2>"
             f"<div class='card-grid'>"
             f"<div class='card'><div class='card-head'><span class='card-title'>Top metric demand</span><span class='badge'>usage.jsonl</span></div><code>{e(demand_str)}</code></div>"
             f"<div class='card'><div class='card-head'><span class='card-title'>Clustered coverage gaps</span><span class='badge badge-warn'>report_gap</span></div><code>{e(gaps_str)}</code></div>"
             f"<div class='card'><div class='card-head'><span class='card-title'>Flagged metrics (&gt;20% error/issue)</span><span class='badge badge-err'>health</span></div><code>{e(flagged_str)}</code></div>"
-            f"</div></section>"
+            f"</div>{mv_html}</section>"
             f"<section id='sec-audit'><h2>Audit trail</h2>"
-            f"<p class='sec-sub'>Append-only governance log from <code>definitions/_state/audit.jsonl</code> tracking reviewer identity, version bumps, and edit ratios.</p>"
+            f"<p class='sec-sub'>Append-only governance log from <code>definitions/_state/audit.jsonl</code> (mirrored to Cloud Logging JSON when <code>--log-json</code> is enabled).</p>"
             f"<div class='table-wrap'><table><tr><th>timestamp</th><th>action</th><th>target</th><th>actor</th><th>version &amp; edit ratio</th></tr>"
             f"{audit_rows}</table></div></section>"
             f"<section id='sec-mcp'><h2>Agent MCP &amp; HTTP API reference</h2>"
             f"<div class='table-wrap'><table><tr><th>Surface</th><th>Tools / Endpoints</th></tr>"
-            f"<tr><td><b class='def-name'>MCP Server (stdio)</b></td><td><code>list_metrics</code> · <code>describe_metric</code> · <code>query_metric</code> · <code>describe_graph</code> · <code>traverse_graph</code> · <code>report_gap</code> · <code>report_issue</code> (no raw SQL tool)</td></tr>"
+            f"<tr><td><b class='def-name'>MCP Server (stdio)</b></td><td><code>list_metrics</code> · <code>search_metrics</code> · <code>describe_metric</code> · <code>query_metric</code> · <code>query_metrics</code> · <code>describe_graph</code> · <code>traverse_graph</code> · <code>report_gap</code> · <code>report_issue</code> (no raw SQL tool)</td></tr>"
             f"<tr><td><b class='def-name'>JSON REST API</b></td><td><code>GET /api/metrics</code> · <code>GET /api/queue</code> · <code>POST /api/certify/{{kind}}/{{name}}?owner=...</code></td></tr>"
-            f"<tr><td><b class='def-name'>Warehouse Backend</b></td><td><code>DuckDBWarehouse</code> (bound parameters) · <code>BigQueryMCP</code> (<code>https://bigquery.googleapis.com/mcp</code> → <code>execute_sql_readonly</code> + <code>dryRun</code> + <code>sqlglot</code> AST literals)</td></tr>"
+            f"<tr><td><b class='def-name'>GCP &amp; Local Backends</b></td><td><code>DuckDBWarehouse</code> (bound parameters) · <code>BigQueryMCP</code> (<code>execute_sql_readonly</code> + <code>dryRun</code> + <code>JOBS_BY_PROJECT</code> + Dataplex Policy Tags) · Cloud Run + Secret Manager</td></tr>"
             f"</table></div></section>"
             f"</main></div>{sys_html}</body></html>"
         )
@@ -991,23 +1076,61 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
         return RedirectResponse("/#sec-queue", 303)
 
     @app.post("/ui/query", response_class=HTMLResponse)
-    def ui_query(metric: str = Form(""), as_role: str = Form(""), dims: str = Form(""),
-                 filters: str = Form(""), entity_keys: str = Form("")):
+    def ui_query(
+        metric: str = Form(""),
+        as_role: str = Form(""),
+        dims: str = Form(""),
+        filters: str = Form(""),
+        entity_keys: str = Form(""),
+        time_grain: str = Form(""),
+        time_range: str = Form(""),
+        order_by: str = Form(""),
+        limit: str = Form(""),
+    ):
         dim_list = [x.strip() for x in dims.split(",") if x.strip()] or None
-        flt_dict: dict = {}
-        for item in [x.strip() for x in filters.split(",") if x.strip()]:
-            if "=" not in item:
-                return _render_query_result(None, f"invalid filter '{item}' (use col=value)")
-            k, _, v = item.partition("=")
-            flt_dict[k.strip()] = v.strip()
+        parsed_filters: dict | list | None = None
+        raw_flt = filters.strip()
+        if raw_flt:
+            if raw_flt.startswith(("{", "[")):
+                try:
+                    parsed_filters = json.loads(raw_flt)
+                except json.JSONDecodeError as ex:
+                    return _render_query_result(None, f"invalid filter JSON: {ex}")
+            else:
+                flt_dict: dict = {}
+                for item in [x.strip() for x in raw_flt.split(",") if x.strip()]:
+                    if "=" not in item:
+                        return _render_query_result(None, f"invalid filter '{item}' (use col=value or JSON)")
+                    k, _, v = item.partition("=")
+                    flt_dict[k.strip()] = v.strip()
+                parsed_filters = flt_dict or None
         keys_list = None
         if entity_keys.strip():
             keys_list = []
             for raw in [x.strip() for x in entity_keys.split(",") if x.strip()]:
                 keys_list.append(int(raw) if raw.lstrip("-").isdigit() else raw)
+        tr_val = None
+        if time_range.strip():
+            tr_s = time_range.strip()
+            tr_val = [p.strip() for p in tr_s.split("..", 1)] if ".." in tr_s else tr_s
+        lim_val = None
+        if limit.strip():
+            if not limit.strip().lstrip("-").isdigit():
+                return _render_query_result(None, f"invalid limit '{limit.strip()}' (expected integer)")
+            lim_val = int(limit.strip())
+        role_arg = "" if svc.bound_role else as_role.strip()
         try:
-            res = svc.query_metric(metric.strip(), dim_list, flt_dict or None,
-                                   as_role=as_role.strip(), entity_keys=keys_list)
+            res = svc.query_metric(
+                metric.strip(),
+                dim_list,
+                parsed_filters,
+                as_role=role_arg,
+                entity_keys=keys_list,
+                time_grain=time_grain.strip() or None,
+                time_range=tr_val,
+                order_by=order_by.strip() or None,
+                limit=lim_val,
+            )
             return _render_query_result(res)
         except Refusal as ex:
             return _render_query_result(None, str(ex))
@@ -1023,10 +1146,24 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
             lhs, _, val = item.partition("=")
             ent, _, col = lhs.partition(".")
             flt_dict.setdefault(ent.strip(), {})[col.strip()] = val.strip()
+        role_arg = "" if svc.bound_role else as_role.strip()
         try:
-            res = svc.traverse_graph(start.strip(), rel_list, flt_dict or None, as_role=as_role.strip())
+            res = svc.traverse_graph(start.strip(), rel_list, flt_dict or None, as_role=role_arg)
             return _render_query_result(res)
         except Refusal as ex:
             return _render_query_result(None, str(ex))
+
+    @app.post("/ui/canary", response_class=HTMLResponse)
+    def ui_canary(dry_run: str = Form("")):
+        res = run_canary(reg, svc.wh, suspend=not bool(dry_run), by="ui-canary")
+        badge = "badge-err" if res["failed"] else "badge-ok"
+        label = f"{len(res['failed'])} failed" if res["failed"] else f"{len(res['passed'])} healthy"
+        mode = "dry-run" if dry_run else "live"
+        return (
+            f'<div class="card"><div class="card-head">'
+            f'<span class="card-title">Canary Probe ({mode})</span>'
+            f'<span class="badge {badge}">{e(label)}</span></div>'
+            f'<pre>{e(json.dumps(res, indent=2))}</pre></div>'
+        )
 
     return app
