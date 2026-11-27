@@ -31,11 +31,24 @@ class DuckDBWarehouse:
 
     def __init__(self, path_or_con: str | Path | duckdb.DuckDBPyConnection, read_only: bool = True):
         if isinstance(path_or_con, (str, Path)):
-            self.con = duckdb.connect(str(path_or_con), read_only=read_only)
+            self._path: Path | None = Path(path_or_con)
+            self._read_only = read_only
+            self._con: duckdb.DuckDBPyConnection | None = (
+                duckdb.connect(str(self._path), read_only=read_only)
+                if (not read_only or self._path.exists()) else None
+            )
             self._owns = True
         else:
-            self.con = path_or_con
+            self._path = None
+            self._read_only = read_only
+            self._con = path_or_con
             self._owns = False
+
+    @property
+    def con(self) -> duckdb.DuckDBPyConnection:
+        if self._con is None:
+            self._con = duckdb.connect(str(self._path), read_only=self._read_only)
+        return self._con
 
     def query(self, sql: str, params: Sequence | None = None,
               max_rows: int | None = None) -> QueryResult:
@@ -55,8 +68,9 @@ class DuckDBWarehouse:
         return dict(out)
 
     def close(self) -> None:
-        if self._owns:
-            self.con.close()
+        if self._owns and self._con is not None:
+            self._con.close()
+            self._con = None
 
 
 def ensure_warehouse(wh_or_con) -> Warehouse:

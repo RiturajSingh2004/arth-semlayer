@@ -3,7 +3,7 @@
 Goal: full-scope semantic layer built in phases. Each phase ships something usable and has acceptance criteria.
 Constraint: free to build and use (ADR-009; for Phases 7-11 see ADR-024 and ADR-025).
 
-**Status: Phases 0-11 built, tested (84 offline tests + live GCP verification), and documented. `semlayer eval --oracle` is 33/33 on both DuckDB and BigQuery MCP; Gemini & Qwen eval results are in EVAL.md.**
+**Status: Phases 0-11 built, tested (88 offline tests + live GCP verification), and documented. `semlayer eval --oracle` is 33/33 on both DuckDB and BigQuery MCP; Gemini & Qwen eval results are in EVAL.md.**
 
 ## Phase 0: Skeleton
 - uv project, single package with subpackages (ADR-001), CI, lint, tests
