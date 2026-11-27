@@ -551,3 +551,61 @@ def test_cli_metric_add_and_canary_dry_run(env_v2, tmp_path):
     cli_main(["--config", str(cfg_file), "--no-llm", "certify", "aov_cli", "--owner", "alice"])
     cli_main(["--config", str(cfg_file), "--no-llm", "canary", "--dry-run"])
     assert reg.get("metric", "aov_cli").state is State.certified
+
+
+def test_web_console_and_system_diagram_reflect_lean_v2_and_gcp(env_v2):
+    from fastapi.testclient import TestClient
+
+    from semlayer.serve.web import create_app
+
+    _, _, reg, wh = env_v2
+    # Add a certified ratio metric and a suspended metric to verify both render cleanly
+    aov = Metric(name="aov", metric_type="ratio", numerator="revenue", denominator="order_count")
+    reg.put_draft(aov)
+    reg.certify("metric", "aov", owner="alice")
+    broken = Metric(name="broken_m", table="orders", agg="count", column="*")
+    reg.put_draft(broken)
+    reg.certify("metric", "broken_m", owner="alice")
+    reg.suspend("metric", "broken_m", reason="dropped column sim")
+
+    svc = Service(reg, wh, bound_role="finance")
+    client = TestClient(create_app(reg, svc))
+
+    # 1. Governance Console & System Architecture view include Lean v2 + GCP ADR-038 elements
+    r = client.get("/?tab=system")
+    assert r.status_code == 200
+    html = r.text
+    for expected in (
+        "ADR-001 → ADR-038",
+        "JOBS_BY_PROJECT",
+        "Dataplex",
+        "search_metrics",
+        "query_metrics",
+        "role: finance (strict)",
+        "Suspended metrics",
+        "dropped column sim",
+        "one_to_many",
+    ):
+        assert expected in html
+
+    # 2. Interactive /ui/query supports time_grain, time_range, JSON operator filters, order_by, limit under bound_role
+    rq = client.post(
+        "/ui/query",
+        data={
+            "metric": "revenue",
+            "dims": "Customer.region",
+            "time_grain": "month",
+            "time_range": "2024-01-01..2024-03-01",
+            "filters": '{"method": {"in": ["card", "bank"]}}',
+            "order_by": "-revenue",
+            "limit": "5",
+        },
+    )
+    assert rq.status_code == 200
+    assert "customer_region" in rq.text
+    assert "300.0" in rq.text
+
+    # 3. Interactive /ui/canary probe runs cleanly
+    rc = client.post("/ui/canary", data={"dry_run": "1"})
+    assert rc.status_code == 200
+    assert "healthy" in rc.text
