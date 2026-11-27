@@ -52,10 +52,10 @@ pre { margin: 6px 0 0; padding: 10px 12px; background: #090808; border: 1px soli
 .brand-wrap { display: flex; align-items: center; gap: 26px; height: 100%; }
 .brand { font-size: 17.5px; font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .brand-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); margin-right: 4px; flex-shrink: 0; }
-.brand-roller { display: inline-block; height: 26px; line-height: 26px; overflow: hidden; vertical-align: bottom; transition: width 0.52s cubic-bezier(0.22, 1, 0.36, 1); }
-.brand-reel { display: flex; flex-direction: column; will-change: transform; animation: brandRollFallback 7.2s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+.brand-roller { display: inline-block; height: 26px; line-height: 26px; overflow: hidden; vertical-align: bottom; text-align: center; }
+.brand-reel { display: flex; flex-direction: column; align-items: center; will-change: transform; animation: brandRollFallback 7.2s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
 .brand-reel.js-driven { animation: none; }
-.reel-word { display: block; height: 26px; line-height: 26px; white-space: nowrap; }
+.reel-word { display: flex; align-items: center; justify-content: center; width: 100%; height: 26px; line-height: 26px; text-align: center; white-space: nowrap; }
 .reel-dhi { color: var(--accent-bright); }
 @keyframes brandRollFallback {
   0%, 38% { transform: translateY(0); }
@@ -186,21 +186,18 @@ button:hover { background: var(--bg-hover); border-color: #423b37; }
 
 SCRIPT = """<script>
 document.addEventListener("DOMContentLoaded", () => {
-  /* 1. Upward rolling wordmark: Semantic -> Dhī -> Semantic */
+  /* 1. Upward rolling wordmark: Semantic -> Dhī -> Semantic (centered in slot) */
   const roller = document.getElementById("brand-roller");
   const reel = document.getElementById("brand-reel");
   if (roller && reel) {
     const words = reel.querySelectorAll(".reel-word");
     if (words.length >= 3) {
       reel.classList.add("js-driven");
-      const widths = Array.from(words).map((w) => Math.ceil(w.getBoundingClientRect().width) + 2);
-      roller.style.width = widths[0] + "px";
       let idx = 0;
       setInterval(() => {
         idx += 1;
         reel.style.transition = "transform 0.55s cubic-bezier(0.22, 1, 0.36, 1)";
         reel.style.transform = `translateY(-${idx * 26}px)`;
-        roller.style.width = widths[idx] + "px";
         if (idx === 2) {
           setTimeout(() => {
             reel.style.transition = "none";
@@ -441,10 +438,15 @@ def _render_query_result(res: dict | None, err: str = "") -> str:
     )
 
 
+def _clip(text: str, limit: int = 38) -> str:
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
 def _system_view(wh_dialect: str, bq_proj: str, bq_ds: str, cert_count: int,
                  rule_count: int, edge_count: int, hidden: bool) -> str:
     cls = "shell tab-view hidden" if hidden else "shell tab-view"
-    active_mode = f"BigQuery MCP ({bq_proj}.{bq_ds})" if wh_dialect == "bigquery" else "DuckDB Local Read-Only"
+    active_mode = _clip(f"BigQuery MCP · {bq_ds}", 36) if wh_dialect == "bigquery" else "DuckDB · local read-only"
+    bq_target = _clip(f"{bq_proj}.{bq_ds}", 38)
     return (
         f"<div id='view-system' class='{cls}'>"
         f"<aside class='sidebar'>"
@@ -543,27 +545,27 @@ def _system_view(wh_dialect: str, bq_proj: str, bq_ds: str, cert_count: int,
         f"data-detail='Snapshots warehouse schema via Warehouse.schema(), parses query_log.jsonl + dbt manifest.json, and extracts column-level lineage with sqlglot.' data-adr='ADR-001 · ADR-012'>"
         f"<rect x='34' y='54' width='282' height='58' rx='8' fill='#181514' stroke='#332d2a'/>"
         f"<text x='48' y='77' fill='#f5f4f2' font-size='13' font-weight='700'>Query Log + Schema + dbt Docs</text>"
-        f"<text x='48' y='96' fill='#a8a29e' font-size='11' font-family='monospace'>ingest.schema_snapshot() · sqlglot lineage</text></g>"
+        f"<text x='48' y='96' fill='#a8a29e' font-size='11' font-family='monospace'>schema_snapshot · sqlglot lineage</text></g>"
 
         f"<g class='arch-node' data-stack='core loop' data-title='Draft &amp; Structural Conflict Engine (src/semlayer/draft, conflicts)' "
         f"data-detail='Clusters single-table aggregates (sum, count, count_distinct, avg, min, max), suggests owners &amp; sensitive-dim rules, and flags variants/duplicates for Split or Pick.' data-adr='ADR-012 · ADR-013'>"
         f"<rect x='34' y='150' width='282' height='82' rx='8' fill='#181514' stroke='#e8652b' stroke-opacity='0.55'/>"
         f"<text x='48' y='173' fill='#f5f4f2' font-size='13' font-weight='700'>Draft Engine &amp; Conflict Detector</text>"
-        f"<text x='48' y='192' fill='#a8a29e' font-size='11' font-family='monospace'>draft_metrics · draft_graph · suggest_rules</text>"
-        f"<text x='48' y='211' fill='#fbbf24' font-size='11' font-family='monospace'>variants / duplicates → Split or Pick</text></g>"
+        f"<text x='48' y='192' fill='#a8a29e' font-size='11' font-family='monospace'>metrics · FK graph · sensitive rules</text>"
+        f"<text x='48' y='211' fill='#fbbf24' font-size='11' font-family='monospace'>variants / duplicates → Split · Pick</text></g>"
 
         f"<g class='arch-node' data-stack='gcp' data-title='Primary LLM · Gemini API via AI Studio (src/semlayer/core/llm.py)' "
         f"data-detail='Default llm_provider: gemini (gemini-3.5-flash-lite) over OpenAI-compatible endpoint using GEMINI_API_KEY (.env). 15 RPM pacer + HTTP 429 Retry-After backoff; words descriptions only.' data-adr='ADR-024 · ADR-029'>"
         f"<rect x='34' y='302' width='282' height='78' rx='8' fill='#0f1c26' stroke='#38bdf8' stroke-opacity='0.75'/>"
         f"<text x='48' y='325' fill='#38bdf8' font-size='12.5' font-weight='700'>Gemini API · AI Studio (Primary LLM)</text>"
         f"<text x='48' y='344' fill='#e2e8f0' font-size='11' font-family='monospace'>gemini-3.5-flash-lite · GEMINI_API_KEY</text>"
-        f"<text x='48' y='362' fill='#94a3b8' font-size='10.5' font-family='monospace'>15 RPM pacer · 429 Retry-After · wording only</text></g>"
+        f"<text x='48' y='362' fill='#94a3b8' font-size='10.5' font-family='monospace'>15 RPM · 429 Retry-After · wording</text></g>"
 
         f"<g class='arch-node' data-stack='local' data-title='Secondary LLM · Local Ollama / OpenAI-Compat (src/semlayer/core/llm.py)' "
         f"data-detail='Config-only switch to llm_provider: ollama (qwen3.5:9b) or openai (llama.cpp, LM Studio, vLLM), or --no-llm deterministic heuristics for air-gapped &amp; CI runs.' data-adr='ADR-006 · ADR-022'>"
         f"<rect x='34' y='416' width='282' height='76' rx='8' fill='#0f1d17' stroke='#34d399' stroke-opacity='0.7'/>"
         f"<text x='48' y='439' fill='#34d399' font-size='12.5' font-weight='700'>Ollama / Local OpenAI (Secondary)</text>"
-        f"<text x='48' y='458' fill='#d1fae5' font-size='11' font-family='monospace'>qwen3.5:9b · :11434 / :8080/v1 · --no-llm</text>"
+        f"<text x='48' y='458' fill='#d1fae5' font-size='11' font-family='monospace'>qwen3.5:9b · OpenAI-compat · --no-llm</text>"
         f"<text x='48' y='476' fill='#86efac' font-size='10.5' font-family='monospace'>100% local private data &amp; keyless CI</text></g>"
 
         # PLANE 2 NODES
@@ -588,8 +590,8 @@ def _system_view(wh_dialect: str, bq_proj: str, bq_ds: str, cert_count: int,
         f"<rect x='374' y='304' width='332' height='88' rx='8' fill='#1b1715' stroke='#e8652b'/>"
         f"<text x='390' y='327' fill='#f5f4f2' font-size='13' font-weight='700'>Service · Policy · Graph · Compiler</text>"
         f"<text x='390' y='346' fill='#f2743d' font-size='11' font-family='monospace'>default deny · row_filter · deny_dims</text>"
-        f"<text x='390' y='364' fill='#a8a29e' font-size='11' font-family='monospace'>SimpleCompiler + sqlglot AST · version + owner</text>"
-        f"<text x='390' y='381' fill='#34d399' font-size='10.5' font-family='monospace'>Active runtime: {e(active_mode)}</text></g>"
+        f"<text x='390' y='364' fill='#a8a29e' font-size='11' font-family='monospace'>SimpleCompiler + sqlglot · vN + owner</text>"
+        f"<text x='390' y='381' fill='#34d399' font-size='10.5' font-family='monospace'>Runtime: {e(active_mode)}</text></g>"
 
         f"<g class='arch-node' data-stack='core gcp local' data-title='AI Agent / MCP Client Surface (src/semlayer/serve/mcp_server.py)' "
         f"data-detail='Agents connect over stdio MCP to list_metrics, describe_metric, query_metric, describe_graph, traverse_graph, report_gap, report_issue. No raw-SQL tool and no warehouse credentials exist.' data-adr='ADR-004 · ADR-008'>"
@@ -605,15 +607,15 @@ def _system_view(wh_dialect: str, bq_proj: str, bq_ds: str, cert_count: int,
         f"<text x='778' y='79' fill='#38bdf8' font-size='13' font-weight='700'>BigQuery Managed MCP (HTTPS)</text>"
         f"<text x='778' y='98' fill='#e2e8f0' font-size='11' font-family='monospace'>bigquery.googleapis.com/mcp · ADC OAuth</text>"
         f"<text x='778' y='116' fill='#7dd3fc' font-size='11' font-family='monospace'>tool: execute_sql_readonly + dryRun cap</text>"
-        f"<text x='778' y='133' fill='#94a3b8' font-size='10.5' font-family='monospace'>sqlglot AST literals · DATE_SUB · IN UNNEST</text></g>"
+        f"<text x='778' y='133' fill='#94a3b8' font-size='10.5' font-family='monospace'>sqlglot AST · DATE_SUB · IN UNNEST</text></g>"
 
         f"<g class='arch-node' data-stack='gcp' data-title='BigQuery Dataset on GCP ({e(bq_proj)}.{e(bq_ds)})' "
         f"data-detail='Cloud tables (customers, orders, payments) seeded via scripts/bq_seed.py (bq load). DML/DDL blocked by execute_sql_readonly; incomplete or truncated (>3,000 row) jobs fail closed.' data-adr='ADR-025 · ADR-028'>"
         f"<rect x='764' y='184' width='322' height='92' rx='8' fill='#0d1824' stroke='#1e496b'/>"
         f"<text x='778' y='207' fill='#f5f4f2' font-size='13' font-weight='700'>BigQuery Dataset (Read-Only)</text>"
-        f"<text x='778' y='226' fill='#38bdf8' font-size='11' font-family='monospace'>{e(bq_proj)}.{e(bq_ds)}</text>"
+        f"<text x='778' y='226' fill='#38bdf8' font-size='11' font-family='monospace'>{e(bq_target)}</text>"
         f"<text x='778' y='245' fill='#94a3b8' font-size='10.5' font-family='monospace'>customers · orders · payments (bq load)</text>"
-        f"<text x='778' y='263' fill='#34d399' font-size='10.5' font-family='monospace'>Verified live: 33/33 oracle · 33/33 Gemini</text></g>"
+        f"<text x='778' y='263' fill='#34d399' font-size='10.5' font-family='monospace'>Verified: 33/33 oracle · 33/33 Gemini</text></g>"
 
         # PLANE 3B: LOCAL DUCKDB NODE
         f"<g class='arch-node' data-stack='local' data-title='DuckDB Local Read-Only Warehouse (src/semlayer/warehouse/__init__.py)' "
@@ -629,9 +631,9 @@ def _system_view(wh_dialect: str, bq_proj: str, bq_ds: str, cert_count: int,
         # PLANE 4: DRIFT & FEEDBACK BAR
         f"<g class='arch-node' data-stack='loop' data-title='Continuous Drift &amp; Feedback Monitor (src/semlayer/monitor)' "
         f"data-detail='Detects schema changes, new query-log patterns, and z-score value anomalies, opening debounced _pending revisions without breaking live vN metrics; clusters agent report_gap calls.' data-adr='ADR-019 · Phase 4'>"
-        f"<rect x='224' y='542' width='450' height='52' rx='8' fill='#1f190e' stroke='#fbbf24' stroke-opacity='0.75'/>"
-        f"<text x='240' y='564' fill='#fbbf24' font-size='12.5' font-weight='700'>PLANE 4 · Monitor, Drift &amp; Feedback Loop</text>"
-        f"<text x='240' y='582' fill='#fde68a' font-size='10.5' font-family='monospace'>schema/pattern/value drift + usage.jsonl gaps → _pending revision (vN→vN+1)</text></g>"
+        f"<rect x='204' y='542' width='480' height='52' rx='8' fill='#1f190e' stroke='#fbbf24' stroke-opacity='0.75'/>"
+        f"<text x='220' y='564' fill='#fbbf24' font-size='12.5' font-weight='700'>PLANE 4 · Monitor, Drift &amp; Feedback Loop</text>"
+        f"<text x='220' y='582' fill='#fde68a' font-size='10.5' font-family='monospace'>schema/pattern/value drift + gap clusters → _pending (vN→vN+1)</text></g>"
 
         f"</svg>"
         f"<div class='arch-inspector'>"
