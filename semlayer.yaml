@@ -1,10 +1,25 @@
+# Warehouse: "duckdb" (local default) | "bigquery" (remote BigQuery MCP server)
+warehouse: duckdb
 db: examples/jaffle_shop/jaffle.duckdb
+# bq_project: YOUR_PROJECT_ID
+# bq_dataset: jaffle_shop
+# bq_mcp_url: https://bigquery.googleapis.com/mcp
+# bq_service_account: semlayer-reader@YOUR_PROJECT_ID.iam.gserviceaccount.com
+# bq_max_bytes: 100000000
+
 registry: definitions
 query_log: examples/jaffle_shop/query_log.jsonl
 # docs: path/to/dbt/target/manifest.json
 
-# LLM (on by default). It writes metric descriptions/explanations and powers the LLM eval arms.
-llm_provider: ollama          # ollama | openai (any OpenAI-compatible server) | none
-llm_model: qwen3.5:9b         # any model your engine serves
+# LLM (on by default): writes metric descriptions/explanations and powers the LLM eval arms.
+# Primary: Gemini API via AI Studio key (set GEMINI_API_KEY in .env or environment).
+llm_provider: gemini                 # gemini | ollama | openai | none
+llm_model: gemini-3.5-flash-lite
+llm_max_tokens: 512
+llm_reasoning_effort: low
+
+# Secondary option (local models — no cloud calls):
+# llm_provider: ollama
+# llm_model: qwen3.5:9b
 # llm_url: http://localhost:11434    # openai provider: e.g. http://localhost:8080/v1 (llama.cpp), :1234/v1 (LM Studio)
-# llm_api_key_env: MY_API_KEY        # name of an env var holding a key, if your server needs one
+# llm_api_key_env: MY_API_KEY

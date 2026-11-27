@@ -4,10 +4,8 @@ import json
 import os
 import sys
 
-import duckdb
-
 from semlayer.conflicts import apply_pick, apply_split, detect
-from semlayer.core import KINDS, Config, Rule, State, make_llm
+from semlayer.core import KINDS, Config, Rule, State, load_dotenv, make_llm
 from semlayer.draft import draft_metrics
 from semlayer.graph import draft_graph
 from semlayer.ingest import Query, dbt_docs, read_query_log, schema_snapshot
@@ -21,17 +19,13 @@ from semlayer.monitor import (
 )
 from semlayer.policy import replay, suggest_rules
 from semlayer.registry import Registry
+from semlayer.warehouse import make_warehouse
 
 LISTY = {"dimensions", "filters", "approvers", "deny_dims"}
 
 
-def _con(cfg: Config, read_only: bool = True):
-    return duckdb.connect(cfg.db, read_only=read_only)
-
-
-'''def _llm(cfg: Config):
-    return OllamaLLM(cfg.llm_model, cfg.llm_url) if cfg.llm_model else NullLLM()
-'''
+def _wh(cfg: Config, read_only: bool = True):
+    return make_warehouse(cfg, read_only=read_only)
 
 def _kv(items: list[str]) -> dict:
     out = {}
@@ -43,8 +37,11 @@ def _kv(items: list[str]) -> dict:
 
 # --- commands -------------------------------------------------------------------------
 def cmd_ingest(a, cfg, reg):
-    con = _con(cfg)
-    schema, queries = schema_snapshot(con), read_query_log(cfg.query_log)
+    wh = _wh(cfg)
+    try:
+        schema, queries = schema_snapshot(wh), read_query_log(cfg.query_log)
+    finally:
+        wh.close()
     docs = dbt_docs(cfg.docs) if cfg.docs else {}
     (reg.state_dir / "ingest.json").write_text(json.dumps({
         "schema": schema, "docs": docs, "queries": [q.__dict__ for q in queries]}))
@@ -158,7 +155,7 @@ def cmd_reindex(a, cfg, reg):
 
 def cmd_serve(a, cfg, reg):
     from semlayer.serve.service import Service
-    svc = Service(reg, _con(cfg))
+    svc = Service(reg, _wh(cfg))
     if a.web:
         import uvicorn
 
@@ -171,23 +168,26 @@ def cmd_serve(a, cfg, reg):
 
 def cmd_drift(a, cfg, reg):
     schema, _, _ = _ingested(reg)
-    con = _con(cfg)
-    changes = schema_drift(schema, schema_snapshot(con))
-    for c in changes:
-        print(("BREAKING " if c.breaking else "digest   ") + str(c))
-    print("opened revisions:", propose_revisions(reg, changes) or "none")
-    new = pattern_drift(reg, read_query_log(cfg.query_log), schema)
-    for m in new:
-        print("new query variant:", m.concept, m.logic)
-        reg.put_draft(m) if reg.get("metric", m.name) is None else None
-    if a.values:
-        from semlayer.serve.service import Service
-        svc = Service(reg, con)
-        for m in reg.certified("metric"):
-            v = svc.con.execute(f"SELECT {m.expression} FROM {m.table}" + (
-                " WHERE " + " AND ".join(f"({f})" for f in m.filters) if m.filters else "")).fetchone()[0]
-            if v is not None and record_value(reg, m.name, float(v)):
-                print("ANOMALY", m.name, v)
+    wh = _wh(cfg)
+    try:
+        changes = schema_drift(schema, schema_snapshot(wh))
+        for c in changes:
+            print(("BREAKING " if c.breaking else "digest   ") + str(c))
+        print("opened revisions:", propose_revisions(reg, changes) or "none")
+        new = pattern_drift(reg, read_query_log(cfg.query_log), schema)
+        for m in new:
+            print("new query variant:", m.concept, m.logic)
+            reg.put_draft(m) if reg.get("metric", m.name) is None else None
+        if a.values:
+            for m in reg.certified("metric"):
+                sql = f"SELECT {m.expression} FROM {m.table}" + (
+                    " WHERE " + " AND ".join(f"({f})" for f in m.filters) if m.filters else "")
+                rows = wh.query(sql).rows
+                v = rows[0][0] if rows else None
+                if v is not None and record_value(reg, m.name, float(v)):
+                    print("ANOMALY", m.name, v)
+    finally:
+        wh.close()
 
 
 def cmd_feedback(a, cfg, reg):
@@ -256,6 +256,7 @@ def main(argv=None):
         oracle=dict(action="store_true"), questions=dict(default="eval/questions.yaml"))
     add("demo", cmd_demo, force=dict(action="store_true", help="wipe a registry that demo did not create"))
     a = p.parse_args(argv)
+    load_dotenv()
     if a.no_llm:
         os.environ["SEMLAYER_LLM_PROVIDER"] = "none"
     cfg = Config.load(a.config)
