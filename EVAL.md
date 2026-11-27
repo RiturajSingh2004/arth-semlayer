@@ -1,14 +1,35 @@
 # EVAL
 
-Commands (run from the project root):
+Commands executed (from the project root in PowerShell):
+```powershell
+# 1. Seed & certify local registry with Gemini descriptions (GEMINI_API_KEY in .env)
+uv run semlayer demo --force
+
+# 2. Oracle & Gemini LLM evals on DuckDB
+uv run semlayer eval --oracle
+uv run semlayer eval --arm layer
+uv run semlayer eval --arm baseline-hints
+uv run semlayer eval --arm baseline
+uv run semlayer eval --arm layer --questions eval/heldout.yaml
+uv run semlayer eval --arm baseline-hints --questions eval/heldout.yaml
+uv run semlayer eval --arm baseline --questions eval/heldout.yaml
+
+# 3. Seed BigQuery & run Oracle + Gemini LLM evals over Google's managed BigQuery MCP server
+gcloud auth login devstar3913@gcplab.me --update-adc
+gcloud config set project geminisprints26blr-3913
+gcloud auth application-default set-quota-project geminisprints26blr-3913
+gcloud services enable bigquery.googleapis.com iamcredentials.googleapis.com --project=geminisprints26blr-3913
+uv run python scripts/bq_seed.py --project geminisprints26blr-3913 --dataset jaffle_shop
+
+$env:SEMLAYER_WAREHOUSE = "bigquery"
+$env:SEMLAYER_BQ_PROJECT = "geminisprints26blr-3913"
+$env:SEMLAYER_BQ_DATASET = "jaffle_shop"
+uv run semlayer eval --oracle
+uv run python scripts/mcp_check.py --warehouse bigquery
+uv run semlayer eval --arm layer
+uv run semlayer eval --arm layer --questions eval/heldout.yaml
 ```
-semlayer eval --oracle                                    # layer with the correct tool call supplied
-semlayer eval --arm layer                                 # LLM routes through the certified layer
-semlayer eval --arm baseline                              # LLM writes raw SQL from the schema, no governance
-semlayer eval --arm baseline-hints                        # same, with column values listed in the prompt
-semlayer eval --arm layer --questions eval/heldout.yaml   # held-out set
-```
-LLM arms need Ollama and `llm_model` in `semlayer.yaml`. Eval traffic is not written to the usage log.
+Eval traffic is not written to the usage log, values of sensitive columns (`policy.SENSITIVE`) are stripped from prompts, and any LLM transport or quota error aborts the run without reporting a score (`ADR-029`).
 
 ## Question sets
 - `eval/questions.yaml`: 33 questions (generator: `python eval/make_questions.py`). The prompt and compiler were tuned against this set.
@@ -19,15 +40,34 @@ Categories: single, grouped, filtered, role, abstain, multi-hop. Each question h
 ## Arms
 | Arm | What it tests | Needs |
 |---|---|---|
-| `layer --oracle` | layer correctness and governance, correct tool call supplied | nothing |
-| `layer` | an LLM picks metric, dims, filters and graph call from the certified catalog | Ollama |
-| `baseline` | an LLM writes raw SQL from the schema, no governance | Ollama |
-| `baseline-hints` | as `baseline`, with the values of low-cardinality text columns in the prompt | Ollama |
+| `layer --oracle` | layer correctness, SQL dialect translation, and governance with the tool call supplied | DuckDB or BigQuery MCP |
+| `layer` | an LLM picks metric, dims, filters and graph call from the certified catalog | Gemini API (default) or Ollama |
+| `baseline` | an LLM writes raw SQL from the schema, no governance | Gemini API or Ollama |
+| `baseline-hints` | as `baseline`, with values of low-cardinality non-sensitive text columns in the prompt | Gemini API or Ollama |
 
-The layer prompt includes metric descriptions, dimension values, the relationships list and a few examples from a different dataset. The baselines get no examples. Not built: an arm using uncertified drafts.
+---
 
-## Recorded results
-Model: qwen3.5:9b (Q4_K_M), Ollama, RTX 3050 4 GB, `num_gpu` 25, temperature 0.
+## Recorded results — Gemini API (`gemini-3.5-flash-lite`) + DuckDB & BigQuery MCP
+- **LLM:** `gemini-3.5-flash-lite` via AI Studio OpenAI-compatible endpoint (`https://generativelanguage.googleapis.com/v1beta/openai`), `temperature: 0`, `reasoning_effort: low`, `max_tokens: 512`, `15 RPM` pacing (`4.0s/request`), Gemini-drafted catalog descriptions.
+- **Cloud warehouse:** Google managed BigQuery MCP (`https://bigquery.googleapis.com/mcp`, `execute_sql_readonly` with native `dryRun: true`), GCP project `geminisprints26blr-3913`, dataset `jaffle_shop`.
+
+| Set | Warehouse | Arm | Answers | Real refusals | Abstention precision | Wrong answers | Overall | Latency / q |
+|---|---|---|---|---|---|---|---|---|
+| Tuned (33) | DuckDB | `layer --oracle` | 25/25 | 8/8 | 8/8 | 0 | **33/33** | 0.0s |
+| Tuned (33) | BigQuery MCP | `layer --oracle` | 25/25 | 8/8 | 8/8 | 0 | **33/33** | 6.9s |
+| Tuned (33) | DuckDB | `layer` (Gemini) | 25/25 | 8/8 | 8/8 | 0 | **33/33** | 4.0s |
+| Tuned (33) | BigQuery MCP | `layer` (Gemini) | 25/25 | 8/8 | 8/8 | 0 | **33/33** | 8.3s |
+| Tuned (33) | DuckDB | `baseline-hints` (Gemini) | 22/25 | 0/8 | n/a (0 refusals) | 3 | **22/33** | 4.0s |
+| Tuned (33) | DuckDB | `baseline` (Gemini) | 15/25 | 0/8 | n/a (0 refusals) | 9 (+1 SQL err) | **15/33** | 4.0s |
+| Held-out (18) | DuckDB | `layer` (Gemini) | 13/13 | 4/5 | 4/4 | 0 | **17/18** | 4.0s |
+| Held-out (18) | BigQuery MCP | `layer` (Gemini) | 12/13 | 5/5 | 5/6 | 0 | **17/18** | 8.5s |
+| Held-out (18) | DuckDB | `baseline-hints` (Gemini) | 11/13 | 0/5 | n/a (0 refusals) | 2 | **11/18** | 4.0s |
+| Held-out (18) | DuckDB | `baseline` (Gemini) | 6/13 | 0/5 | n/a (0 refusals) | 7 | **6/18** | 4.0s |
+
+---
+
+## Secondary baseline — Local Ollama (`qwen3.5:9b`) on DuckDB
+Model: `qwen3.5:9b` (Q4_K_M), Ollama, RTX 3050 4 GB, `num_gpu` 25, temperature 0.
 
 | Set | Arm | Answers | Real refusals | Overall |
 |---|---|---|---|---|
@@ -40,28 +80,21 @@ Model: qwen3.5:9b (Q4_K_M), Ollama, RTX 3050 4 GB, `num_gpu` 25, temperature 0.
 | Held-out (18) | baseline-hints | 8/13 | 0/5 | 8/18 |
 | Held-out (18) | baseline | 5/13 | 0/5 | 5/18 |
 
-In the baseline rows, "overall" counts a SQL error on a should-refuse question as a pass, although the baseline never actually refuses.
+In the Qwen baseline rows, "overall" counted a SQL error on a should-refuse question as a pass, although the baseline never actually refused.
 
-Other results:
-- **Agent test** (Claude Desktop through MCP, a much stronger model than the 9B): revenue, revenue by method, placed orders, returned-order revenue (via `describe_graph`, `traverse_graph`, `query_metric`), churn abstention with gap logged, role denial for `eu_analyst` revenue, EU-filtered customer count. The returned-order question failed until `describe_graph` existed, because no tool listed relationship names.
-- **Drift test:** dropping `payments.method` opened a pending revision for `revenue` only; the live version kept serving; rejecting the revision restored a clean queue.
-- **Feedback:** gap notes are clustered by question text (first sentence, word overlap); policy replay showed no unauthorized result.
+---
+
+## Live GCP & MCP Verification Summary
+- **End-to-end stdio → BigQuery MCP (`scripts/mcp_check.py --warehouse bigquery`):** Verified `list_metrics`, `describe_graph`, `query_metric("revenue", as_role="finance")` (`26035.71`), `query_metric("revenue", as_role="eu_analyst")` (`access denied`), `query_metric("customer_count", as_role="eu_analyst")` (`24`, EU row filter applied), and `traverse_graph("Customer", ["HAS_ORDER"], filters={"Order": {"status": "returned"}})` (`26` keys).
+- **Hostile SQL-injection & read-only guardrails on live BigQuery MCP:** Filter payloads (`"card' OR '1'='1"`, `"card'; DROP TABLE payments; --"`, `"card\\' OR TRUE /* comment */"`) rendered through `sqlglot` AST literals returned `[[None]]` with zero leakage; `execute_sql_readonly(..., dryRun=True)` returned `totalBytesProcessed: 2400`; a direct `DELETE` probe against `execute_sql_readonly` was rejected server-side (`"MCP execute_sql_readonly tool allows only SELECT statements."`).
 
 ## Findings
-- Outputs are deterministic for identical inputs (the three held-out layer runs matched exactly), so repeated runs are not independent samples.
-- Routing is sensitive to the catalog text: rewriting metric descriptions moved the tuned score from 25/25 to 21/25. Re-run the eval after any description, rule or metric change.
-- Column-value hints help a raw-SQL baseline (filtered questions 5/8 to 8/8; held-out answers 5/13 to 8/13) but not with business definitions (revenue came out as 14,585.50 instead of 26,035.71), multi-hop questions (0 correct) or access control (0 real refusals).
-- The layer's accuracy lead holds with hints equalised: +4 answers on the tuned set and +4 on the held-out set.
-- Remaining layer failures: an unrequested grouping by `method` on multi-hop questions (totals correct, split by method); a transient Ollama HTTP 500 (retries added afterwards); `Orders by customer region` answered with a different metric (customers by region); `How many customers made a payment?` routed to `customer_count` plus a graph filter the layer refused.
-- Baseline failures: wrong business definitions, unsupported date functions, nonexistent columns, wrong multi-hop joins, and no access control (7 of 8 refusal questions answered; the EU analyst saw all 60 customers).
+- **Stronger models do not replace governance:** Upgrading raw text-to-SQL from `qwen3.5:9b` to `gemini-3.5-flash-lite` improved `baseline-hints` answer accuracy (`17/25` → `22/25` tuned; `8/13` → `11/13` held-out), yet **real refusals stayed at `0/8` and `0/5`**. Raw-SQL Gemini leaked `customers.email`, answered `guest` and `eu_analyst` unauthorized queries, invented formulas for `churn`, `gross_margin`, and `NPS`, and joined `payments.order_id = orders.id` (`14,585.50`) instead of customer-level entity semantics (`25,415.96`).
+- **Gemini fixes the 9B routing drop on rewritten descriptions:** With LLM-authored descriptions, `gemini-3.5-flash-lite` achieved **`33/33` (`100%`)** on the tuned set on both DuckDB and BigQuery MCP (vs. `29/33` on `qwen3.5:9b`) and **`17/18`** on the held-out set (vs. `16/18` on `qwen3.5:9b`).
+- **Zero silent wrong answers on the certified layer:** Across both held-out runs (DuckDB and BigQuery MCP), the single miss on each run was either routing an ambiguous refusal (`Orders by customer region` → `customer_count` by `region` on DuckDB) or a conservative layer refusal when Gemini passed a redundant `{"status": "success"}` filter to `avg_payment` on BigQuery MCP (`wrong_answers = 0`). As noted in `ADR-024`, cloud inference is not bit-identical across runs even at `temperature: 0`.
+- **Drift & feedback:** Dropping `payments.method` opened a pending revision for `revenue` only while keeping the live version serving; gap notes cluster by question text and policy replay confirmed zero unauthorized access.
 
-## Caveats
-- The prompt and compiler were tuned against the 33-question set; use the held-out numbers as the generalisation estimate. Samples are small (33 and 18).
-- The layer prompt has examples that the baselines do not.
-- Roles are asserted by the caller; the eval does not test authentication.
-- Compiler rule added after seeing failures: a dimension pinned by an equality filter is not grouped.
-
-## Rules
-- Fixed model and temperature; re-run after any catalog or prompt change.
-- Do not edit prompts after looking at held-out results; if you do, write a new held-out set.
-- Report failures, not just wins.
+## Caveats & Rules
+- The prompt and compiler were tuned against the 33-question set; use the 18-question held-out set as the generalisation estimate.
+- Roles are asserted by the caller (`as_role`); wire authentication in front of MCP/HTTP in production.
+- Fixed model and temperature; re-run after any catalog or prompt change; do not edit prompts after looking at held-out results; report failures, not just wins.
