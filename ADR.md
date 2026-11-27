@@ -132,3 +132,8 @@ Format: Context / Decision / Consequences.
 - Context: `_send` previously retried only 5xx and connection errors, so HTTP 429 raised immediately (`HTTPError` is an `OSError`). Drafting then disabled the LLM for the rest of the run, and `evaluate.py` caught `OSError` as `"error"`, which scored as a pass on `expect: refuse` questions.
 - Decision: pace requests (`llm_rpm`), retry HTTP 429 with `Retry-After` (or exponential backoff), and abort an `eval` run immediately on any LLM transport or quota error without reporting a score. Strip values of sensitive columns (`policy.SENSITIVE`) from both `layer` and `baseline-hints` eval prompts.
 - Consequences: slower runs under tight rate limits; an exhausted quota stops cleanly instead of inflating abstention scores.
+
+## ADR-030: Technical dark-theme Governance Console in `serve/web.py` (extends ADR-010)
+- Context: the minimal unstyled HTML table in `web.py` required switching back to the CLI to resolve conflicts (`pick`/`split`), inspect dialect SQL, view policy rules/edges/audit logs, or test governed `query_metric`/`traverse_graph` calls.
+- Decision: keep zero CSS frameworks and zero frontend build steps (`ADR-010`), embedding a single Ryoku-inspired dark carbon & burnt-orange stylesheet (`#0d0c0b` / `#e8652b`), `Ctrl+K` live filter, conflict resolution endpoints (`/conflicts/pick`, `/conflicts/split`), dialect SQL previews (DuckDB & BigQuery `sqlglot` AST), entity/policy/feedback/audit inspectors, and an HTMX governed query/graph runner (`/ui/query`, `/ui/traverse` calling `Service` only).
+- Consequences: reviewers can complete the full draft → conflict resolution → certification → governed test loop in the browser while preserving all no-JS form fallbacks and security invariants.

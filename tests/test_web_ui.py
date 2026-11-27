@@ -168,3 +168,39 @@ def test_live_cli_serve_web_over_http(tmp_path):
     finally:
         proc.terminate()
         proc.wait(timeout=5)
+
+
+def test_web_conflict_resolution_and_governed_query_runner(env):
+    c = TestClient(create_app(env.reg, env.svc), follow_redirects=False)
+    # Seed a variant conflict and resolve it from the UI via /conflicts/split and /conflicts/pick
+    env.reg.put_draft(Metric(name="gmv_v1", concept="gmv", table="payments", agg="sum",
+                             column="amount", filters=["status = 'success'"], evidence={"usage": 5}))
+    env.reg.put_draft(Metric(name="gmv_v2", concept="gmv", table="payments", agg="sum",
+                             column="amount", evidence={"usage": 1}))
+    r_split = c.post("/conflicts/split", data={
+        "concept": "gmv", "rename_gmv_v1": "gmv_net", "rename_gmv_v2": "gmv_gross"
+    })
+    assert r_split.status_code == 303
+    assert env.reg.get("metric", "gmv_net") is not None and env.reg.get("metric", "gmv_gross") is not None
+
+    # Duplicate conflict resolved via /conflicts/pick
+    env.reg.put_draft(Metric(name="dup_a", concept="dup_a", table="orders", agg="max", column="id",
+                             evidence={"usage": 4}))
+    env.reg.put_draft(Metric(name="dup_b", concept="dup_b", table="orders", agg="max", column="id",
+                             evidence={"usage": 1}))
+    r_pick = c.post("/conflicts/pick", data={"winner": "dup_a"})
+    assert r_pick.status_code == 303
+    assert env.reg.get("metric", "dup_b").state is State.deprecated
+
+    # Interactive governed query & graph runner respects policy and returns compiled SQL + rows
+    ok_q = c.post("/ui/query", data={"metric": "revenue", "as_role": "finance", "filters": "method=card"})
+    assert ok_q.status_code == 200 and "v1" in ok_q.text and "SELECT SUM(amount)" in ok_q.text
+    denied_q = c.post("/ui/query", data={"metric": "revenue", "as_role": "eu_analyst"})
+    assert "REFUSED" in denied_q.text and "access denied" in denied_q.text
+
+    ok_g = c.post("/ui/traverse", data={"start": "Customer", "path": "HAS_ORDER",
+                                        "as_role": "finance", "filters": "Order.status=returned"})
+    assert ok_g.status_code == 200 and "26 keys" in ok_g.text
+    denied_g = c.post("/ui/traverse", data={"start": "Customer", "path": "HAS_ORDER", "as_role": "eu_analyst"})
+    assert "REFUSED" in denied_g.text and "unrestricted" in denied_g.text
+
