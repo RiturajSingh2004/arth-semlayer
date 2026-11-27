@@ -1,10 +1,10 @@
 # Warehouse: "duckdb" (local default) | "bigquery" (remote BigQuery MCP server)
 warehouse: duckdb
 db: examples/jaffle_shop/jaffle.duckdb
-# bq_project: geminisprints26blr-3913
+# bq_project: YOUR_PROJECT_ID
 # bq_dataset: jaffle_shop
 # bq_mcp_url: https://bigquery.googleapis.com/mcp
-# bq_service_account: semlayer-reader@geminisprints26blr-3913.iam.gserviceaccount.com
+# bq_service_account: semlayer-reader@YOUR_PROJECT_ID.iam.gserviceaccount.com
 # bq_max_bytes: 100000000
 
 registry: definitions

@@ -1,10 +1,11 @@
 """Seed the deterministic jaffle_shop demo tables into BigQuery using `bq load` (works without DML/billing).
 Run from the project root:
-  uv run python scripts/bq_seed.py --project geminisprints26blr-3913 --dataset jaffle_shop
+  uv run python scripts/bq_seed.py --project YOUR_PROJECT_ID --dataset jaffle_shop
 """
 import argparse
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -64,7 +65,9 @@ def export_jsonl(out_dir: Path) -> dict[str, Path]:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Load jaffle_shop demo tables into BigQuery.")
-    ap.add_argument("--project", default="geminisprints26blr-3913")
+    default_proj = os.environ.get("SEMLAYER_BQ_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT") or ""
+    ap.add_argument("--project", default=default_proj, required=not default_proj,
+                    help="Target GCP project ID (or set GOOGLE_CLOUD_PROJECT)")
     ap.add_argument("--dataset", default="jaffle_shop")
     ap.add_argument("--location", default="US")
     args = ap.parse_args()

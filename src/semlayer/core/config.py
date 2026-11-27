@@ -29,7 +29,7 @@ def load_dotenv(*paths: str | Path) -> None:
 class Config(BaseModel):
     warehouse: Literal["duckdb", "bigquery"] = "duckdb"
     db: str = "examples/jaffle_shop/jaffle.duckdb"
-    bq_project: str = "geminisprints26blr-3913"
+    bq_project: str = ""  # set in semlayer.yaml, SEMLAYER_BQ_PROJECT, or GOOGLE_CLOUD_PROJECT
     bq_dataset: str = "jaffle_shop"
     bq_mcp_url: str = "https://bigquery.googleapis.com/mcp"
     bq_service_account: str | None = None

@@ -22,7 +22,7 @@ from semlayer.serve.service import Refusal, Service
 from semlayer.warehouse import DuckDBWarehouse
 from semlayer.warehouse.bigquery import BigQueryMCP, parse_bq_payload, render_sql
 
-PROJECT = "geminisprints26blr-3913"
+PROJECT = "demo-gcp-project"
 DATASET = "jaffle_shop"
 
 

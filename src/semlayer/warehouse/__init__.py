@@ -89,6 +89,11 @@ def make_warehouse(cfg, read_only: bool = True) -> Warehouse:
         project = (os.environ.get("SEMLAYER_BQ_PROJECT")
                    or os.environ.get("GOOGLE_CLOUD_PROJECT")
                    or cfg.bq_project)
+        if not project:
+            raise ValueError(
+                "BigQuery warehouse requires a GCP project: set bq_project in semlayer.yaml, "
+                "SEMLAYER_BQ_PROJECT, or GOOGLE_CLOUD_PROJECT"
+            )
         dataset = os.environ.get("SEMLAYER_BQ_DATASET") or cfg.bq_dataset
         mcp_url = os.environ.get("SEMLAYER_BQ_MCP_URL") or cfg.bq_mcp_url
         sa = os.environ.get("SEMLAYER_BQ_SERVICE_ACCOUNT") or cfg.bq_service_account

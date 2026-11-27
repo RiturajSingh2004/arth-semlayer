@@ -21,7 +21,7 @@ uv run ruff check src tests scripts eval examples
 uv run pytest -q
 uv run semlayer demo --no-llm
 uv run semlayer eval --oracle
-uv run python scripts/bq_seed.py --project geminisprints26blr-3913 --dataset jaffle_shop
+uv run python scripts/bq_seed.py --project YOUR_PROJECT_ID --dataset jaffle_shop
 uv run python scripts/mcp_check.py
 ```
 

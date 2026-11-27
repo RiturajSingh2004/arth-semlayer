@@ -30,7 +30,7 @@ llm_model: gemini-3.5-flash-lite
 llm_max_tokens: 512
 llm_reasoning_effort: low
 ```
-`GEMINI_API_KEY` authenticates directly against `https://generativelanguage.googleapis.com/v1beta/openai` and works alongside GCP Application Default Credentials used by `BigQueryMCP` on `geminisprints26blr-3913`.
+`GEMINI_API_KEY` authenticates directly against `https://generativelanguage.googleapis.com/v1beta/openai` and works alongside GCP Application Default Credentials used by `BigQueryMCP`.
 
 ### 2. Secondary option: Local models (`ollama` or `openai`)
 Switch to local inference with config changes only in `semlayer.yaml`:
@@ -41,21 +41,21 @@ llm_model: qwen3.5:9b
 ```
 Override without editing files via `SEMLAYER_LLM_PROVIDER`, `SEMLAYER_LLM_MODEL`, `SEMLAYER_LLM_URL`, or disable the LLM with `--no-llm` / `SEMLAYER_LLM_PROVIDER=none`. Without a key or running local server, `draft` and `demo` warn once and fall back to heuristic descriptions; LLM `eval` fails fast or aborts cleanly on quota errors (`ADR-029`).
 
-## GCP & BigQuery over MCP (`geminisprints26blr-3913`)
-Install the optional GCP auth dependency and sign into the target GCP account/project:
+## GCP & BigQuery over MCP
+Install the optional GCP auth dependency and sign into your GCP project:
 ```bash
 uv sync --extra gcp
-gcloud auth login devstar3913@gcplab.me
-gcloud config set project geminisprints26blr-3913
-gcloud auth application-default login
-gcloud services enable bigquery.googleapis.com iamcredentials.googleapis.com --project=geminisprints26blr-3913
-gcloud beta services mcp enable bigquery.googleapis.com --project=geminisprints26blr-3913
+gcloud auth login --update-adc
+gcloud config set project YOUR_PROJECT_ID
+gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+gcloud services enable bigquery.googleapis.com iamcredentials.googleapis.com --project=YOUR_PROJECT_ID
+gcloud beta services mcp enable bigquery.googleapis.com --project=YOUR_PROJECT_ID
 ```
 Seed the `jaffle_shop` tables into BigQuery and verify over MCP:
 ```bash
-uv run python scripts/bq_seed.py --project geminisprints26blr-3913 --dataset jaffle_shop
-SEMLAYER_WAREHOUSE=bigquery uv run semlayer eval --oracle
-uv run python scripts/mcp_check.py --warehouse bigquery
+uv run python scripts/bq_seed.py --project YOUR_PROJECT_ID --dataset jaffle_shop
+SEMLAYER_WAREHOUSE=bigquery SEMLAYER_BQ_PROJECT=YOUR_PROJECT_ID uv run semlayer eval --oracle
+SEMLAYER_BQ_PROJECT=YOUR_PROJECT_ID uv run python scripts/mcp_check.py --warehouse bigquery
 ```
 Or set `warehouse: bigquery` (and optional `bq_service_account` for read-only service-account impersonation) in `semlayer.yaml`.
 

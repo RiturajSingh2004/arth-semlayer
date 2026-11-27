@@ -399,7 +399,7 @@ def _conflict_card(c) -> str:
     )
 
 
-def _compiled_preview(m, dialect: str, project: str = "geminisprints26blr-3913",
+def _compiled_preview(m, dialect: str, project: str = "your-gcp-project",
                       dataset: str = "jaffle_shop") -> tuple[str, str]:
     duck_c = SimpleCompiler(dialect="duckdb").compile(m, m.dimensions[:1])
     bq_c = SimpleCompiler(dialect="bigquery").compile(m, m.dimensions[:1])
@@ -719,7 +719,7 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
         cert_edges = reg.certified("edge")
         cert_rules = reg.certified("rule")
         wh_dialect = getattr(svc.wh, "dialect", "duckdb")
-        bq_proj = getattr(svc.wh, "project", "geminisprints26blr-3913")
+        bq_proj = getattr(svc.wh, "project", "") or "your-gcp-project"
         bq_ds = getattr(svc.wh, "dataset", "jaffle_shop")
 
         cert_rows = []
