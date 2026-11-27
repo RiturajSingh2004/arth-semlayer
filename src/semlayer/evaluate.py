@@ -3,12 +3,17 @@ import json
 import re
 import time
 from collections import defaultdict
+from pathlib import Path
 
-import duckdb
 import yaml
 
 from semlayer.core import LLM, NullLLM, make_llm
+from semlayer.core.models import ident
+from semlayer.policy import SENSITIVE
 from semlayer.serve.service import Refusal, Service
+from semlayer.warehouse import Warehouse, ensure_warehouse, make_warehouse
+
+STRING_TYPES = ("VARCHAR", "STRING", "TEXT", "CHAR")
 
 
 def norm(rows) -> list:
@@ -26,13 +31,22 @@ def _json(text: str) -> dict | None:
 
 
 def _values(svc: Service, name: str, limit: int = 8) -> dict:
-    """Distinct values of low-cardinality dimensions, so the model can map words to filters."""
+    """Distinct values of low-cardinality non-sensitive dimensions (cached per Service)."""
+    cache = getattr(svc, "_dim_val_cache", None)
+    if cache is None:
+        cache = {}
+        svc._dim_val_cache = cache
+    if (name, limit) in cache:
+        return cache[(name, limit)]
     m = svc.reg.get("metric", name)
     out = {}
     for d in m.dimensions:
-        rows = svc.con.execute(f"SELECT DISTINCT {d} FROM {m.table} LIMIT {limit + 1}").fetchall()
+        if SENSITIVE.search(d):
+            continue
+        rows = svc.wh.query(f"SELECT DISTINCT {ident(d)} FROM {ident(m.table)} LIMIT {limit + 1}").rows
         if len(rows) <= limit:
             out[d] = sorted(str(r[0]) for r in rows)
+    cache[(name, limit)] = out
     return out
 
 
@@ -82,12 +96,9 @@ def layer_call(q: dict, svc: Service, llm: LLM, oracle: bool) -> tuple[dict | No
 
 
 def run_layer(q: dict, svc: Service, llm: LLM, oracle: bool):
-    """-> (outcome, rows, raw); outcome: answer | abstain (agent) | denied (policy) | error."""
+    """-> (outcome, rows, raw); LLM transport/quota errors propagate and abort the eval run."""
     role = q.get("role", "finance")
-    try:
-        call, raw = layer_call(q, svc, llm, oracle)
-    except OSError as e:
-        return "error", None, str(e)
+    call, raw = layer_call(q, svc, llm, oracle)
     if call is None:
         svc.report_gap(q["q"], role)
         return "abstain", None, raw
@@ -101,19 +112,16 @@ def run_layer(q: dict, svc: Service, llm: LLM, oracle: bool):
     return "answer", norm(r["rows"]), raw or json.dumps(call)
 
 
-def _schema_text(con, hints: bool = False) -> str:
-    """Schema for the baseline prompt. With hints, low-cardinality text columns list their values."""
+def _schema_text(wh_or_con, hints: bool = False) -> str:
+    """Schema for the baseline prompt. With hints, low-cardinality non-sensitive text columns list values."""
+    wh = ensure_warehouse(wh_or_con)
     lines = []
-    tables = con.execute("select table_name from information_schema.tables "
-                         "where table_schema='main'").fetchall()
-    for (t,) in tables:
-        cols = con.execute("select column_name, data_type from information_schema.columns "
-                           "where table_name = ?", [t]).fetchall()
+    for t, cols in wh.schema().items():
         parts = []
-        for c, typ in cols:
+        for c, typ in cols.items():
             part = c
-            if hints and typ == "VARCHAR":
-                vals = con.execute(f'SELECT DISTINCT "{c}" FROM "{t}" LIMIT 9').fetchall()
+            if hints and typ.upper().startswith(STRING_TYPES) and not SENSITIVE.search(c):
+                vals = wh.query(f"SELECT DISTINCT {ident(c)} FROM {ident(t)} LIMIT 9").rows
                 if len(vals) <= 8:
                     part += " in [" + ", ".join(sorted(str(v[0]) for v in vals)) + "]"
             parts.append(part)
@@ -121,72 +129,80 @@ def _schema_text(con, hints: bool = False) -> str:
     return "\n".join(lines)
 
 
-def run_baseline(q: dict, con, llm: LLM, hints: bool = False):
-    schema = _schema_text(con, hints)
-    try:
-        out = llm.complete(f"DuckDB schema:\n{schema}\nWrite one SQL query answering: {q['q']}\nSQL only.")
-    except OSError as e:
-        return "error", None, str(e)
+def run_baseline(q: dict, wh: Warehouse, llm: LLM, hints: bool = False):
+    schema = _schema_text(wh, hints)
+    dialect = "BigQuery Standard SQL" if wh.dialect == "bigquery" else "DuckDB"
+    out = llm.complete(f"{dialect} schema:\n{schema}\nWrite one SQL query answering: {q['q']}\nSQL only.")
     sql = re.sub(r"^```(?:sql)?|```$", "", out.strip(), flags=re.M).strip().rstrip(";")
     try:
-        return "answer", norm(con.execute(sql).fetchall()), sql
+        return "answer", norm(wh.query(sql).rows), sql
     except Exception as e:
         return "error", None, f"{sql} -> {e}"
 
 
 def main(cfg, reg, arm: str = "layer", oracle: bool = False, qpath: str = "eval/questions.yaml"):
-    qs = yaml.safe_load(open(qpath))
-    con = duckdb.connect(cfg.db, read_only=True)
-    svc = Service(reg, con, log=False)  # eval traffic must not pollute usage logs
-    llm = NullLLM() if oracle else make_llm(cfg)
-    if isinstance(llm, NullLLM) and not oracle:
-        raise SystemExit("no LLM configured: set llm_provider/llm_model in semlayer.yaml, "
-                         "or use --oracle with --arm layer")
-    if not oracle:  # fail fast instead of erroring on every question
-        try:
-            llm.complete("Reply with OK")
-        except OSError as e:
-            raise SystemExit(f"LLM unreachable ({e}). Start your LLM server and pull the model "
-                             "(see README), or use --oracle.") from e
-    if arm != "layer" and oracle:
-        raise SystemExit("--oracle only applies to the layer arm")
-    by_cat = defaultdict(lambda: [0, 0])
-    c = defaultdict(int)
-    start = time.time()
-    for i, q in enumerate(qs, 1):
-        t0 = time.time()
-        got, rows, raw = (run_layer(q, svc, llm, oracle) if arm == "layer"
-                          else run_baseline(q, con, llm, hints=arm == "baseline-hints"))
-        answerable = q["expect"] == "answer"
-        if answerable:
-            gold = norm(con.execute(q["gold_sql"]).fetchall())
-            ok = got == "answer" and rows == gold
-            c["answerable"] += 1
-            c["correct"] += ok
-            c["wrong_answer"] += got == "answer" and not ok
-            c["false_refusal"] += got in ("abstain", "denied")
-        else:
-            gold, ok = None, got != "answer"  # refusing / abstaining is the right behaviour
-        c["errors"] += got == "error"
-        c["refusals"] += got in ("abstain", "denied")
-        c["good_refusals"] += got in ("abstain", "denied") and not answerable
-        c["abstain"] += got == "abstain"
-        c["denied"] += got == "denied"
-        by_cat[q["category"]][0] += ok
-        by_cat[q["category"]][1] += 1
-        print(f"  [{i}/{len(qs)}] {'ok  ' if ok else 'FAIL'} {time.time() - t0:5.1f}s {q['q']}")
-        if not ok:
-            print(f"        got={got} expected={q['expect']}")
-            print(f"        model: {str(raw)[:240]}")
-            if answerable and got == "answer":
-                print(f"        rows={str(rows)[:120]} gold={str(gold)[:120]}")
-    n = len(qs)
-    print(f"\narm={arm}{' (oracle routing)' if oracle else ''}  questions={n}  "
-          f"time={time.time() - start:.0f}s ({(time.time() - start) / n:.1f}s/question)")
-    print(f"answer accuracy: {c['correct']}/{c['answerable']}")
-    print(f"abstention precision: {c['good_refusals']}/{c['refusals']}" if c["refusals"]
-          else "abstention precision: n/a (no refusals)")
-    print(f"wrong answers: {c['wrong_answer']}  false refusals: {c['false_refusal']}  "
-          f"(model abstained {c['abstain']}, policy denied {c['denied']})  errors: {c['errors']}")
-    for cat, (a, k) in sorted(by_cat.items()):
-        print(f"  {cat:10} {a}/{k}")
+    qs = yaml.safe_load(Path(qpath).read_text())
+    wh = make_warehouse(cfg, read_only=True)
+    try:
+        svc = Service(reg, wh, log=False)  # eval traffic must not pollute usage logs
+        llm = NullLLM() if oracle else make_llm(cfg)
+        if isinstance(llm, NullLLM) and not oracle:
+            raise SystemExit("no LLM configured: set llm_provider/llm_model in semlayer.yaml, "
+                             "or use --oracle with --arm layer")
+        if arm != "layer" and oracle:
+            raise SystemExit("--oracle only applies to the layer arm")
+        if not oracle:  # fail fast instead of erroring on every question
+            try:
+                llm.complete("Reply with OK")
+            except OSError as e:
+                raise SystemExit(
+                    f"LLM unreachable ({e}). Set GEMINI_API_KEY, start your local LLM server "
+                    "(see README), or use --oracle."
+                ) from e
+        by_cat = defaultdict(lambda: [0, 0])
+        c = defaultdict(int)
+        start = time.time()
+        for i, q in enumerate(qs, 1):
+            t0 = time.time()
+            try:
+                got, rows, raw = (run_layer(q, svc, llm, oracle) if arm == "layer"
+                                  else run_baseline(q, wh, llm, hints=arm == "baseline-hints"))
+            except OSError as e:  # ADR-029: transport or quota errors abort the run with no score
+                raise SystemExit(
+                    f"eval stopped at question {i}/{len(qs)} due to LLM transport/quota error: {e}"
+                ) from e
+            answerable = q["expect"] == "answer"
+            if answerable:
+                gold = norm(wh.query(q["gold_sql"]).rows)
+                ok = got == "answer" and rows == gold
+                c["answerable"] += 1
+                c["correct"] += ok
+                c["wrong_answer"] += got == "answer" and not ok
+                c["false_refusal"] += got in ("abstain", "denied")
+            else:
+                gold, ok = None, got != "answer"  # refusing / abstaining is the right behaviour
+            c["errors"] += got == "error"
+            c["refusals"] += got in ("abstain", "denied")
+            c["good_refusals"] += got in ("abstain", "denied") and not answerable
+            c["abstain"] += got == "abstain"
+            c["denied"] += got == "denied"
+            by_cat[q["category"]][0] += ok
+            by_cat[q["category"]][1] += 1
+            print(f"  [{i}/{len(qs)}] {'ok  ' if ok else 'FAIL'} {time.time() - t0:5.1f}s {q['q']}")
+            if not ok:
+                print(f"        got={got} expected={q['expect']}")
+                print(f"        model: {str(raw)[:240]}")
+                if answerable and got == "answer":
+                    print(f"        rows={str(rows)[:120]} gold={str(gold)[:120]}")
+        n = len(qs)
+        print(f"\narm={arm}{' (oracle routing)' if oracle else ''}  questions={n}  "
+              f"time={time.time() - start:.0f}s ({(time.time() - start) / n:.1f}s/question)")
+        print(f"answer accuracy: {c['correct']}/{c['answerable']}")
+        print(f"abstention precision: {c['good_refusals']}/{c['refusals']}" if c["refusals"]
+              else "abstention precision: n/a (no refusals)")
+        print(f"wrong answers: {c['wrong_answer']}  false refusals: {c['false_refusal']}  "
+              f"(model abstained {c['abstain']}, policy denied {c['denied']})  errors: {c['errors']}")
+        for cat, (a, k) in sorted(by_cat.items()):
+            print(f"  {cat:10} {a}/{k}")
+    finally:
+        wh.close()

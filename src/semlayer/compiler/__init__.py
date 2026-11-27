@@ -22,6 +22,9 @@ class Compiler(Protocol):
 
 
 class SimpleCompiler:
+    def __init__(self, dialect: str = "duckdb"):
+        self.dialect = dialect
+
     def compile(self, m: Metric, dims=(), filters=None, row_filter=None,
                 entity_keys=None) -> Compiled:
         dims, filters = list(dims or []), dict(filters or {})
@@ -39,8 +42,16 @@ class SimpleCompiler:
         if entity_keys is not None:
             if not m.entity_key:
                 raise CompileError(f"{m.name} is not linked to an entity")
-            where.append(f"list_contains(?, {m.entity_key})")
-            params.append(list(entity_keys))
+            keys = list(entity_keys)
+            if self.dialect == "bigquery":
+                if not keys:
+                    where.append("FALSE")
+                else:
+                    where.append(f"{ident(m.entity_key)} IN UNNEST(?)")
+                    params.append(keys)
+            else:
+                where.append(f"list_contains(?, {m.entity_key})")
+                params.append(keys)
         cols = ", ".join([*map(ident, dims), f"{m.expression} AS {m.name}"])
         sql = f"SELECT {cols} FROM {m.table}"
         if where:

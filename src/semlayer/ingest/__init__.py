@@ -1,6 +1,5 @@
 """Connectors: schema snapshot, query log, optional dbt manifest docs."""
 import json
-from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,15 +19,10 @@ def read_query_log(path: str | Path) -> list[Query]:
     return [Query("unknown", s.strip()) for s in p.read_text().split(";") if s.strip()]
 
 
-def schema_snapshot(con) -> dict[str, dict[str, str]]:
-    rows = con.execute(
-        "SELECT table_name, column_name, data_type FROM information_schema.columns"
-        " WHERE table_schema='main' ORDER BY table_name, ordinal_position"
-    ).fetchall()
-    out: dict[str, dict[str, str]] = defaultdict(dict)
-    for t, c, d in rows:
-        out[t][c] = d
-    return dict(out)
+def schema_snapshot(wh) -> dict[str, dict[str, str]]:
+    from semlayer.warehouse import ensure_warehouse
+
+    return ensure_warehouse(wh).schema()
 
 
 def dbt_docs(manifest: str | Path) -> dict[str, str]:

@@ -9,6 +9,7 @@ from semlayer.core import Metric, Rule
 from semlayer.graph import Graph
 from semlayer.policy import evaluate, unrestricted
 from semlayer.registry import Registry
+from semlayer.warehouse import ensure_warehouse
 
 MAX_ROWS = 1000
 
@@ -26,9 +27,10 @@ def _plain(v):
 
 
 class Service:
-    def __init__(self, reg: Registry, con, compiler: Compiler | None = None, log: bool = True):
-        self.reg, self.con, self.log = reg, con, log
-        self.compiler = compiler or SimpleCompiler()
+    def __init__(self, reg: Registry, wh, compiler: Compiler | None = None, log: bool = True):
+        self.reg, self.con, self.log = reg, wh, log
+        self.wh = ensure_warehouse(wh)
+        self.compiler = compiler or SimpleCompiler(dialect=self.wh.dialect)
 
     # --- helpers ----------------------------------------------------------------------
     def _log(self, event: str, metric: str = "", role: str = "", note: str = "",
@@ -71,9 +73,9 @@ class Service:
             raise Refusal(f"dimensions not permitted for this role: {sorted(used & d.deny_dims)}")
         try:
             c = self.compiler.compile(m, dims, filters, d.row_filter, entity_keys)
-            cur = self.con.execute(c.sql, c.params)
-            cols = [x[0] for x in cur.description]
-            rows = [[_plain(v) for v in r] for r in cur.fetchmany(MAX_ROWS)]
+            res = self.wh.query(c.sql, c.params, max_rows=MAX_ROWS)
+            cols = res.columns
+            rows = [[_plain(v) for v in r] for r in res.rows]
         except CompileError as e:
             self._log("error", metric, as_role, str(e))
             raise Refusal(str(e)) from e
@@ -116,9 +118,12 @@ class Service:
                 raise Refusal(f"not allowed as a filter on {ent}: {bad}; allowed: {sorted(ok)}")
         g = Graph(self.reg.certified("entity"), self.reg.certified("edge"))
         try:
-            keys = g.traverse(self.con, start, path, filters)
+            keys = g.traverse(self.wh, start, path, filters)
         except ValueError as e:
             raise Refusal(str(e)) from e
+        except Exception as e:
+            self._log("error", f"graph:{start}", as_role, str(e))
+            raise Refusal(f"query failed: {e}") from e
         self._log("query", f"graph:{start}", as_role)
         return {"entity": start, "count": len(keys), "keys": keys}
 

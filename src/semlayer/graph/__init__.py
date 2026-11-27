@@ -73,6 +73,8 @@ class Graph:
             sql += " WHERE " + " AND ".join(where)
         return sql + " ORDER BY 1 LIMIT 10000", params
 
-    def traverse(self, con, start: str, path: list[str], filters: dict | None = None) -> list:
+    def traverse(self, wh, start: str, path: list[str], filters: dict | None = None) -> list:
+        from semlayer.warehouse import ensure_warehouse
+
         sql, params = self.traverse_sql(start, path, filters)
-        return [r[0] for r in con.execute(sql, params).fetchall()]
+        return [r[0] for r in ensure_warehouse(wh).query(sql, params).rows]
