@@ -840,7 +840,7 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
         )
         empty = (
             '<tr><td colspan=5><div class="empty-card"><div><strong>Review queue is clear</strong> · '
-            'No pending drafts or drift revisions awaiting sign-off.</div>'
+            'No pending drafts or revisions in queue.</div>'
             '<span class="badge badge-ok">All certified</span></div></td></tr>'
         )
 
@@ -1071,7 +1071,7 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
             f"<main class='content'>"
             f"<div class='hero-card'><div class='hero-top'><div>"
             f"<div class='status-pill'><span class='{status_dot_cls}'></span><span>{e(status_text)}</span></div>"
-            f"<h1>ARTH: SemLayer · Governance Console</h1>"
+            f"<h1>ARTH: SemLayer · Review queue</h1>"
             f"<p class='lead' style='margin-bottom:0'>Certify metrics, ratios, FK edges, and RBAC rules before agents touch your data. "
             f"Use the workspace tabs below to focus, or launch a 1-click governed query test.</p>"
             f"</div><div class='hero-actions'>"
