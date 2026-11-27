@@ -10,5 +10,6 @@ from .models import (  # noqa: F401
     Node,
     Rule,
     State,
+    parse_derived_formula,
     transition,
 )

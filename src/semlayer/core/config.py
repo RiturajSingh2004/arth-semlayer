@@ -37,6 +37,12 @@ class Config(BaseModel):
     registry: str = "definitions"
     query_log: str = "examples/jaffle_shop/query_log.jsonl"
     docs: str | None = None  # optional dbt manifest.json
+    # Governance & runtime limits (ADR-031, ADR-032)
+    bound_role: str | None = None
+    timezone: str = "UTC"
+    max_rows: int = 1000
+    max_groups: int = 1000
+    max_filter_list: int = 500
     # LLM (on by default). AI Studio Gemini API is the primary provider (GEMINI_API_KEY);
     # local engines ("ollama", "openai") remain secondary options, and "none" (--no-llm) turns it off.
     llm_provider: Literal["gemini", "ollama", "openai", "none"] = "gemini"
