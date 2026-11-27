@@ -3,6 +3,7 @@ import asyncio
 import datetime
 import json
 import math
+import re
 import urllib.error
 import urllib.request
 from collections import defaultdict
@@ -20,6 +21,32 @@ from . import QueryResult
 CLOUD_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 BQ_MCP_URL = "https://bigquery.googleapis.com/mcp"
 ALLOWED_TOOL = "execute_sql_readonly"
+BQ_REGION_RE = re.compile(r"^region-[a-z0-9-]+$")
+
+
+def _sanitise_owner_hint(user_email: str) -> str:
+    """Convert a BigQuery job `user_email` into a privacy-safe local identifier (strip domain)."""
+    local = (user_email or "").split("@", 1)[0].strip().lower()
+    cleaned = re.sub(r"[^a-z0-9_]+", "_", local).strip("_")
+    if not cleaned:
+        return "unknown"
+    return f"u_{cleaned}" if cleaned[0].isdigit() else cleaned
+
+
+def normalise_bq_query_tables(sql: str, project: str, dataset: str) -> str:
+    """Strip `project.dataset.` or `dataset.` qualifiers so single-table draft parsing matches local schema."""
+    try:
+        tree = sqlglot.parse_one(sql, read="bigquery")
+    except sqlglot.errors.SqlglotError:
+        return sql
+    for tbl in tree.find_all(exp.Table):
+        cat = (tbl.catalog or "").strip("`")
+        db = (tbl.db or "").strip("`")
+        if db == dataset and (not cat or cat == project):
+            tbl.set("catalog", None)
+            tbl.set("db", None)
+            tbl.set("this", exp.to_identifier(tbl.name))
+    return tree.sql(dialect="duckdb")
 
 
 def google_access_token(service_account: str | None = None,
@@ -145,6 +172,14 @@ def render_sql(sql: str, params: Sequence | None, project: str, dataset: str) ->
         if (isinstance(node, exp.Add) and isinstance(node.this, exp.CurrentDate)
                 and isinstance(node.expression, exp.Literal) and node.expression.is_int):
             return exp.DateAdd(this=exp.CurrentDate(), expression=node.expression.copy(), unit=exp.var("DAY"))
+        if isinstance(node, (exp.TimestampTrunc, exp.DateTrunc)):
+            raw_unit = (node.unit.name if node.unit else "").upper()
+            if raw_unit in {"DAY", "WEEK", "ISOWEEK", "MONTH", "QUARTER", "YEAR"}:
+                bq_unit = "ISOWEEK" if raw_unit == "WEEK" else raw_unit
+                target = node.this.copy()
+                if not isinstance(target, exp.Cast):
+                    target = exp.Cast(this=target, to=exp.DataType.build("DATE"))
+                return exp.DateTrunc(this=target, unit=exp.var(bq_unit))
         return node
 
     tree = tree.transform(_rewrite_dates)
@@ -218,10 +253,12 @@ class BigQueryMCP:
 
     def __init__(self, project: str, dataset: str, mcp_url: str = BQ_MCP_URL,
                  service_account: str | None = None, max_bytes: int = 100_000_000,
+                 location: str = "region-us",
                  token_provider: Callable[[], str] | None = None,
                  dry_run_fn: Callable[[str], int] | None = None,
                  http_client_factory: Callable[[dict[str, str]], object] | None = None):
         self.project, self.dataset, self.mcp_url = project, dataset, mcp_url
+        self.location = location
         self.service_account, self.max_bytes = service_account, max_bytes
         self._token_provider = token_provider or (
             lambda: google_access_token(service_account=self.service_account)
@@ -317,6 +354,57 @@ class BigQueryMCP:
         out: dict[str, dict[str, str]] = defaultdict(dict)
         for t, c, d in res.rows:
             out[str(t)][str(c)] = str(d)
+        return dict(out)
+
+    def recent_queries(self, limit: int = 500, days: int = 30) -> list[tuple[str, str]]:
+        """Fetch recent SELECT statements from BigQuery INFORMATION_SCHEMA.JOBS_BY_PROJECT (ADR-036)."""
+        ident(self.dataset)
+        if not self.project or any(ch in self.project for ch in ("`", ";", "\n", "\r", "\x00", " ")):
+            raise ValueError(f"invalid BigQuery project id: {self.project!r}")
+        if not BQ_REGION_RE.match(self.location):
+            raise ValueError(
+                f"invalid BigQuery region qualifier {self.location!r} (expected e.g. 'region-us')"
+            )
+        lim = max(1, min(int(limit), 3000))
+        lookback = max(1, min(int(days), 365))
+        jobs_sql = (
+            f"SELECT user_email, query "
+            f"FROM `{self.project}`.`{self.location}`.INFORMATION_SCHEMA.JOBS_BY_PROJECT "
+            f"WHERE creation_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {lookback} DAY) "
+            f"AND job_type = 'QUERY' AND state = 'DONE' AND error_result IS NULL "
+            f"AND statement_type = 'SELECT' "
+            f"AND LOWER(query) NOT LIKE '%information_schema%' "
+            f"ORDER BY creation_time DESC LIMIT {lim}"
+        )
+        res = self._run_sql(jobs_sql, max_rows=lim)
+        out: list[tuple[str, str]] = []
+        for row in res.rows:
+            if len(row) >= 2 and row[1]:
+                user = _sanitise_owner_hint(str(row[0] or ""))
+                norm_sql = normalise_bq_query_tables(str(row[1]).strip().rstrip(";"), self.project, self.dataset)
+                out.append((user, norm_sql))
+        return out
+
+    def policy_tagged_columns(self) -> dict[str, list[str]]:
+        """Return `{table: [column, ...]}` carrying Dataplex / Data Catalog policy tags (ADR-036)."""
+        ident(self.dataset)
+        if not self.project or any(ch in self.project for ch in ("`", ";", "\n", "\r", "\x00", " ")):
+            raise ValueError(f"invalid BigQuery project id: {self.project!r}")
+        tags_sql = (
+            f"SELECT table_name, field_path "
+            f"FROM `{self.project}`.`{self.dataset}`.INFORMATION_SCHEMA.COLUMN_FIELD_PATHS "
+            f"WHERE ARRAY_LENGTH(policy_tags) > 0 "
+            f"ORDER BY table_name, field_path"
+        )
+        try:
+            res = self._run_sql(tags_sql)
+        except Exception:
+            return {}
+        out: dict[str, list[str]] = defaultdict(list)
+        for t, fp in res.rows:
+            col = str(fp).split(".", 1)[0]
+            if col not in out[str(t)]:
+                out[str(t)].append(col)
         return dict(out)
 
     def close(self) -> None:

@@ -137,3 +137,39 @@ Format: Context / Decision / Consequences.
 - Context: the minimal unstyled HTML table in `web.py` required switching back to the CLI to resolve conflicts (`pick`/`split`), inspect dialect SQL, view policy rules/edges/audit logs, or test governed `query_metric`/`traverse_graph` calls.
 - Decision: keep zero CSS frameworks and zero frontend build steps (`ADR-010`), embedding a single Ryoku-inspired dark carbon & burnt-orange stylesheet (`#0d0c0b` / `#e8652b`), `Ctrl+K` live filter, conflict resolution endpoints (`/conflicts/pick`, `/conflicts/split`), dialect SQL previews (DuckDB & BigQuery `sqlglot` AST), entity/policy/feedback/audit inspectors, and an HTMX governed query/graph runner (`/ui/query`, `/ui/traverse` calling `Service` only).
 - Consequences: reviewers can complete the full draft → conflict resolution → certification → governed test loop in the browser while preserving all no-JS form fallbacks and security invariants.
+
+## ADR-031: Bound role (`serve --role`), resource caps, and `suspended` canary health
+- Context: caller-asserted `as_role` is vulnerable to prompt injection when an untrusted agent calls MCP directly; unbounded group counts or `IN` lists can overload the warehouse; and a certified metric whose source column drops fails on every user query until a human acts.
+- Decision: add `bound_role` (`semlayer serve --role` / `SEMLAYER_BOUND_ROLE`): when set, `Service` enforces the bound role and rejects any non-empty caller-supplied `as_role` (`strict` role binding). Enforce configurable `max_rows`, `max_groups`, and `max_filter_list` caps. Add `State.suspended` (`certified <-> suspended`, `suspended -> deprecated`, never served to agents) with `suspend_reason`, plus `semlayer canary` (`--dry-run`) to probe certified metrics with zero-row `LIMIT 0` queries and suspend broken definitions automatically (cascading to dependent derived/ratio metrics).
+- Consequences: prompt injection cannot escalate roles on a role-bound MCP server; broken definitions fail closed into `suspended` with an audited reason instead of failing live queries.
+
+## ADR-032: Structured `QuerySpec`, `sqlglot` AST compiler, time grains/ranges, and filter operators
+- Context: v1 compiled single-table SQL via string formatting with equality-only filters and no time grains, relative time ranges, ordering, or top-N limits.
+- Decision: introduce `QuerySpec` and refactor `SimpleCompiler` to build `sqlglot` ASTs per dialect (`duckdb`, `bigquery`). Support `time_dimension` / `time_dimensions` with grains `day`, `week` (ISO Monday), `month`, `quarter`, `year`; half-open `[start, end)` and relative time ranges (`last_N_days`, `this_month`, `last_month`, `this_quarter`, `last_quarter`, `this_year`, `last_year`) against an injectable clock and configured timezone (default `UTC`); parameterised filter operators (`eq`, `ne`, `in`, `gt`, `gte`, `lt`, `lte`, `between`, `is_null`, gated by dimension type); and validated `order_by` / `limit`. Existing v1 `query_metric` arguments continue to work unchanged.
+- Consequences: richer analytical queries across DuckDB and BigQuery MCP with dialect-correct time truncation and AST-level injection safety.
+
+## ADR-033: `ratio` and `derived` metrics, multi-metric CTEs, and dependency tracking
+- Context: LLMs routinely miscompute ratios (averaging averages, dividing by zero, or cross-multiplying joined tables).
+- Decision: add `metric_type` (`simple` default, `ratio` with `numerator`/`denominator`, and `derived` with a restricted arithmetic AST formula over certified metric identifiers and numeric constants, never raw SQL). Division always wraps denominators in `NULLIF(..., 0)`. `query_metrics` (and `query_metric` on `ratio`/`derived` metrics) compiles each input `simple` metric in its own CTE at the requested grain, enforces RBAC and `row_filter`/`deny_dims` on every referenced metric, and joins CTEs via null-safe `FULL OUTER JOIN ... ON IS NOT DISTINCT FROM`. Certifying a `ratio`/`derived` metric requires certified inputs; cycles are rejected; deprecating/suspending an input blocks or cascades to dependents.
+- Consequences: multi-metric queries and ratios never suffer fan-out multiplication or unauthorized indirect metric reads.
+
+## ADR-034: Many-to-one dimension joins across certified edges with fan-out refusal
+- Decision: add `cardinality` (`one_to_many`, `many_to_one`, `one_to_one`, `many_to_many`) on `Edge` (`draft_graph` defaults PK->FK `src -> dst` edges to `one_to_many`, making reverse `dst -> src` traversal `many_to_one`). `query_metric` / `query_metrics` allow slicing and filtering by `<Entity>.<dim>` along unique shortest certified `many_to_one` / `one_to_one` paths, checking target dimension certification and caller `deny_dims`. `one_to_many` and `many_to_many` paths (and ambiguous equal-length paths) are refused with a clear fan-out explanation.
+- Consequences: totals across joined groups preserve the overall metric total by construction; `traverse_graph` remains available for entity-set filtering across `one_to_many` edges.
+
+## ADR-035: Catalog retrieval via SQLite FTS5 (`search_metrics`) and paginated `list_metrics`
+- Decision: add `synonyms: list[str]` on `Metric`, index certified metrics in a SQLite FTS5 virtual table (`metrics_fts`) inside `Registry`, expose `search_metrics(query, k)` ranked by BM25 with punctuation-safe prefix tokenisation, and add optional `limit`/`offset` pagination to `list_metrics`. Zero embedding or external vector dependencies required.
+- Consequences: fast offline metric discovery for large catalogs without bloating agent context windows.
+
+## ADR-036: BigQuery `INFORMATION_SCHEMA.JOBS` ingestion and Dataplex Policy Tag `deny_dims`
+- Context: on GCP, BigQuery already logs historical `SELECT` queries in `INFORMATION_SCHEMA.JOBS_BY_PROJECT` and tags sensitive columns via Dataplex / Data Catalog policy tags in `INFORMATION_SCHEMA.COLUMN_FIELD_PATHS`.
+- Decision: extend `BigQueryMCP` (still invoking **only** `execute_sql_readonly`) with `recent_queries(limit, days)` over `` `{project}`.`{location}`.INFORMATION_SCHEMA.JOBS_BY_PROJECT `` (stripping email domains from `user_email` for privacy and normalising qualified dataset table names for `draft_metrics`) and `policy_tagged_columns()` over `` `{project}`.`{dataset}`.INFORMATION_SCHEMA.COLUMN_FIELD_PATHS ``. `semlayer ingest --from-bq-jobs` ingests BigQuery job history without a local JSONL file, and `suggest_rules` merges Dataplex policy-tagged columns with `policy.SENSITIVE` into drafted `deny_dims` rules.
+- Consequences: zero-export onboarding and automatic PII column restriction drafting on BigQuery with zero extra dependencies.
+
+## ADR-037: Cloud Run deployment, Secret Manager, Cloud Scheduler canary, and Cloud Logging JSON
+- Decision: add `log_json` (`--log-json` / `SEMLAYER_LOG_JSON=1`) emitting single-line Google Cloud Logging structured JSON (`severity`, `message`, `component`, `event`) to `sys.stderr` (never `sys.stdout`, preserving stdio MCP JSON-RPC framing and CLI JSON outputs). Ship a non-root root `Dockerfile` and `deploy/cloudrun/` recipes for Cloud Run IAM-protected Governance Console (`--no-allow-unauthenticated`), Secret Manager `GEMINI_API_KEY` injection, and scheduled Cloud Run Job `semlayer canary`.
+- Consequences: stateless Cloud Run services emit structured audit/refusal/suspension telemetry directly into Cloud Logging & Cloud Monitoring with zero extra Python packages.
+
+## ADR-038: BigQuery Materialized View DDL advisor (`semlayer feedback --recommend-mv`)
+- Decision: inspect high-demand certified `simple` metrics from `feedback_summary` and generate human-reviewable BigQuery `CREATE MATERIALIZED VIEW IF NOT EXISTS` DDL (flagging `count_distinct` metrics that BigQuery incremental MVs restrict). Never execute DDL automatically.
+- Consequences: operators get copy-paste BigQuery cost/latency optimisations for hot certified metrics while keeping the runtime strictly read-only.

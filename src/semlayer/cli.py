@@ -5,23 +5,32 @@ import os
 import sys
 
 from semlayer.conflicts import apply_pick, apply_split, detect
-from semlayer.core import KINDS, Config, Rule, State, load_dotenv, make_llm
+from semlayer.core import KINDS, Config, Metric, Rule, State, load_dotenv, make_llm
 from semlayer.draft import draft_metrics
 from semlayer.graph import draft_graph
-from semlayer.ingest import Query, dbt_docs, read_query_log, schema_snapshot
+from semlayer.ingest import (
+    Query,
+    dbt_docs,
+    policy_tags_snapshot,
+    read_bq_jobs,
+    read_query_log,
+    schema_snapshot,
+)
 from semlayer.monitor import (
     feedback_summary,
     pattern_drift,
     propose_revisions,
     read_usage,
+    recommend_materialized_views,
     record_value,
+    run_canary,
     schema_drift,
 )
 from semlayer.policy import replay, suggest_rules
 from semlayer.registry import Registry
 from semlayer.warehouse import make_warehouse
 
-LISTY = {"dimensions", "filters", "approvers", "deny_dims"}
+LISTY = {"dimensions", "time_dimensions", "synonyms", "filters", "approvers", "deny_dims"}
 
 
 def _wh(cfg: Config, read_only: bool = True):
@@ -39,13 +48,24 @@ def _kv(items: list[str]) -> dict:
 def cmd_ingest(a, cfg, reg):
     wh = _wh(cfg)
     try:
-        schema, queries = schema_snapshot(wh), read_query_log(cfg.query_log)
+        schema = schema_snapshot(wh)
+        policy_tags = policy_tags_snapshot(wh)
+        if a.from_bq_jobs or cfg.query_log == "bigquery":
+            queries = read_bq_jobs(wh, limit=a.bq_limit, days=a.bq_days)
+        else:
+            queries = read_query_log(cfg.query_log)
     finally:
         wh.close()
     docs = dbt_docs(cfg.docs) if cfg.docs else {}
     (reg.state_dir / "ingest.json").write_text(json.dumps({
-        "schema": schema, "docs": docs, "queries": [q.__dict__ for q in queries]}))
-    print(f"ingested {len(schema)} tables, {len(queries)} queries, {len(docs)} doc entries")
+        "schema": schema,
+        "docs": docs,
+        "policy_tags": policy_tags,
+        "queries": [q.__dict__ for q in queries],
+    }))
+    tagged_n = sum(len(v) for v in policy_tags.values())
+    print(f"ingested {len(schema)} tables, {len(queries)} queries, {len(docs)} doc entries, "
+          f"{tagged_n} policy-tagged columns")
 
 
 def _ingested(reg):
@@ -53,11 +73,11 @@ def _ingested(reg):
     if not p.exists():
         sys.exit("run `semlayer ingest` first")
     d = json.loads(p.read_text())
-    return d["schema"], d["docs"], [Query(**q) for q in d["queries"]]
+    return d["schema"], d["docs"], [Query(**q) for q in d["queries"]], d.get("policy_tags", {})
 
 
 def cmd_draft(a, cfg, reg):
-    schema, docs, queries = _ingested(reg)
+    schema, docs, queries, policy_tags = _ingested(reg)
     metrics, skipped = draft_metrics(queries, schema, make_llm(cfg), docs)
     existing = {m.logic for st in (State.draft, State.certified) for m in reg.list("metric", st)}
     made = {"draft": 0, "pending": 0, "skipped": 0}
@@ -70,7 +90,8 @@ def cmd_draft(a, cfg, reg):
             n += 1
             m.name = f"{m.concept}_v{n}"
         made[reg.put_draft(m)] += 1
-    nodes = draft_graph(schema) + suggest_rules(schema, a.roles.split(",") if a.roles else [])
+    roles = [r for r in a.roles.split(",") if r] if a.roles else []
+    nodes = draft_graph(schema) + suggest_rules(schema, roles, policy_tags=policy_tags)
     for n in nodes:
         if reg.get(n.kind, n.name) is None:
             reg.put_draft(n)
@@ -149,13 +170,60 @@ def cmd_rule_add(a, cfg, reg):
     print(reg.put_draft(rule), a.name)  # certify it like any other definition
 
 
+def cmd_metric_add(a, cfg, reg):
+    try:
+        m = Metric(
+            name=a.name,
+            metric_type=a.type,
+            concept=a.concept or a.name,
+            description=a.description,
+            table=a.table,
+            agg=a.agg,
+            column=a.column,
+            numerator=a.numerator,
+            denominator=a.denominator,
+            formula=a.formula,
+            dimensions=[d for d in a.dimensions.split(",") if d],
+            time_dimension=a.time_dimension or None,
+            synonyms=[s for s in a.synonyms.split(",") if s],
+        )
+    except ValueError as e:
+        sys.exit(f"invalid metric: {e}")
+    try:
+        tag = reg.put_draft(m)
+    except ValueError as e:
+        sys.exit(f"invalid metric: {e}")
+    print(tag, a.name)
+
+
+def cmd_canary(a, cfg, reg):
+    wh = _wh(cfg)
+    try:
+        res = run_canary(reg, wh, suspend=not a.dry_run, by=a.by)
+    finally:
+        wh.close()
+    print(json.dumps(res, indent=2))
+    if res["failed"]:
+        sys.exit(1)
+
+
 def cmd_reindex(a, cfg, reg):
     reg.reindex()
     print("indexed:", {k: len(reg.list(k)) for k in KINDS})
 
 def cmd_serve(a, cfg, reg):
     from semlayer.serve.service import Service
-    svc = Service(reg, _wh(cfg))
+
+    bound_role = a.role or os.environ.get("SEMLAYER_BOUND_ROLE") or cfg.bound_role
+    svc = Service(
+        reg,
+        _wh(cfg),
+        bound_role=bound_role,
+        timezone=cfg.timezone,
+        max_rows=cfg.max_rows,
+        max_groups=cfg.max_groups,
+        max_filter_list=cfg.max_filter_list,
+    )
     if a.web:
         import uvicorn
 
@@ -167,7 +235,7 @@ def cmd_serve(a, cfg, reg):
 
 
 def cmd_drift(a, cfg, reg):
-    schema, _, _ = _ingested(reg)
+    schema, _, _, _ = _ingested(reg)
     wh = _wh(cfg)
     try:
         changes = schema_drift(schema, schema_snapshot(wh))
@@ -191,7 +259,15 @@ def cmd_drift(a, cfg, reg):
 
 
 def cmd_feedback(a, cfg, reg):
-    print(json.dumps(feedback_summary(read_usage(reg), a.min_volume), indent=2))
+    events = read_usage(reg)
+    out = feedback_summary(events, a.min_volume)
+    if a.recommend_mv:
+        proj = a.project or os.environ.get("SEMLAYER_BQ_PROJECT") or cfg.bq_project or "YOUR_PROJECT_ID"
+        ds = a.dataset or os.environ.get("SEMLAYER_BQ_DATASET") or cfg.bq_dataset or "jaffle_shop"
+        out["materialized_views"] = recommend_materialized_views(
+            reg, events, project=proj, dataset=ds, min_volume=a.min_volume
+        )
+    print(json.dumps(out, indent=2))
 
 
 def cmd_policy(a, cfg, reg):
@@ -219,6 +295,7 @@ def main(argv=None):
     p.add_argument("--config", default=None)
     p.add_argument("--commit", action="store_true", help="git-commit registry changes")
     p.add_argument("--no-llm", action="store_true", help="skip the LLM (heuristic descriptions only)")
+    p.add_argument("--log-json", action="store_true", help="emit Cloud Logging structured JSON to stderr")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     def add(name, fn, *args, **flags):
@@ -230,7 +307,10 @@ def main(argv=None):
             s.add_argument(f"--{k.replace('_', '-')}", **v)
         return s
 
-    add("ingest", cmd_ingest)
+    add("ingest", cmd_ingest,
+        from_bq_jobs=dict(action="store_true", help="ingest SELECT history from BigQuery INFORMATION_SCHEMA.JOBS_BY_PROJECT"),
+        bq_limit=dict(type=int, default=500),
+        bq_days=dict(type=int, default=30))
     add("draft", cmd_draft, roles=dict(default="", help="comma-separated roles for sensitive-column suggestions"))
     kind = dict(default="metric", choices=list(KINDS))
     by = dict(default="human")
@@ -246,11 +326,21 @@ def main(argv=None):
     add("rule-add", cmd_rule_add, "name", role=dict(required=True), metric=dict(default="*"),
         effect=dict(default="allow", choices=["allow", "deny"]), row_filter=dict(default=None),
         deny_dims=dict(help="comma-separated", default=""))
+    add("metric-add", cmd_metric_add, "name",
+        type=dict(default="ratio", choices=["simple", "ratio", "derived"]),
+        concept=dict(default=""), description=dict(default=""),
+        table=dict(default=""), agg=dict(default=None, choices=["sum", "count", "count_distinct", "avg", "min", "max"]),
+        column=dict(default="*"), numerator=dict(default=None), denominator=dict(default=None),
+        formula=dict(default=None), dimensions=dict(default=""), time_dimension=dict(default=""),
+        synonyms=dict(default=""))
+    add("canary", cmd_canary, dry_run=dict(action="store_true"), by=dict(default="canary"))
     add("reindex", cmd_reindex)
     add("serve", cmd_serve, web=dict(action="store_true"), port=dict(type=int, default=8000),
-        host=dict(default="127.0.0.1"))
+        host=dict(default="127.0.0.1"), role=dict(default=None, help="bind caller role in strict mode"))
     add("drift", cmd_drift, values=dict(action="store_true"))
-    add("feedback", cmd_feedback, min_volume=dict(type=int, default=3))
+    add("feedback", cmd_feedback, min_volume=dict(type=int, default=3),
+        recommend_mv=dict(action="store_true", help="emit BigQuery Materialized View DDL recommendations"),
+        project=dict(default=""), dataset=dict(default=""))
     add("policy-replay", cmd_policy)
     add("eval", cmd_eval, arm=dict(default="layer", choices=["layer", "baseline", "baseline-hints"]),
         oracle=dict(action="store_true"), questions=dict(default="eval/questions.yaml"))
@@ -260,6 +350,8 @@ def main(argv=None):
     if a.no_llm:
         os.environ["SEMLAYER_LLM_PROVIDER"] = "none"
     cfg = Config.load(a.config)
+    if a.log_json or cfg.log_json:
+        os.environ["SEMLAYER_LOG_JSON"] = "1"
     reg = Registry(cfg.registry, commit=a.commit)
     a.fn(a, cfg, reg)
 

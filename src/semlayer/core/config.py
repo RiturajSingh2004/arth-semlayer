@@ -1,9 +1,32 @@
+import json
 import os
+import sys
+import time
 from pathlib import Path
 from typing import Literal
 
 import yaml
 from pydantic import BaseModel
+
+
+def emit_cloud_log(severity: str, message: str, **fields) -> None:
+    """Emit Google Cloud Logging structured JSON to stderr when SEMLAYER_LOG_JSON is enabled.
+
+    Writing to stderr preserves stdio MCP JSON-RPC framing on stdout while still being parsed
+    natively as structured JSON by Cloud Run / Cloud Logging.
+    """
+    flag = os.environ.get("SEMLAYER_LOG_JSON", "").strip().lower()
+    if flag not in {"1", "true", "yes", "on"}:
+        return
+    payload = {
+        "severity": severity.upper(),
+        "message": message,
+        "component": "arth-semlayer",
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        **fields,
+    }
+    sys.stderr.write(json.dumps(payload) + "\n")
+    sys.stderr.flush()
 
 
 def load_dotenv(*paths: str | Path) -> None:
@@ -31,12 +54,20 @@ class Config(BaseModel):
     db: str = "examples/jaffle_shop/jaffle.duckdb"
     bq_project: str = ""  # set in semlayer.yaml, SEMLAYER_BQ_PROJECT, or GOOGLE_CLOUD_PROJECT
     bq_dataset: str = "jaffle_shop"
+    bq_location: str = "region-us"  # INFORMATION_SCHEMA.JOBS region qualifier (e.g. region-us, region-eu)
     bq_mcp_url: str = "https://bigquery.googleapis.com/mcp"
     bq_service_account: str | None = None
     bq_max_bytes: int = 100_000_000  # dry-run byte cap (0 disables dry-run)
     registry: str = "definitions"
     query_log: str = "examples/jaffle_shop/query_log.jsonl"
     docs: str | None = None  # optional dbt manifest.json
+    # Governance & runtime limits (ADR-031, ADR-032, ADR-037)
+    bound_role: str | None = None
+    timezone: str = "UTC"
+    max_rows: int = 1000
+    max_groups: int = 1000
+    max_filter_list: int = 500
+    log_json: bool = False
     # LLM (on by default). AI Studio Gemini API is the primary provider (GEMINI_API_KEY);
     # local engines ("ollama", "openai") remain secondary options, and "none" (--no-llm) turns it off.
     llm_provider: Literal["gemini", "ollama", "openai", "none"] = "gemini"

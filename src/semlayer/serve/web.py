@@ -297,6 +297,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 def _summary(n) -> str:
     if n.kind == "metric":
+        if n.metric_type != "simple":
+            return f"[{n.metric_type.upper()}] {n.expression}"
         w = f" WHERE {' AND '.join(n.filters)}" if n.filters else ""
         return f"{n.expression} FROM {n.table}{w}"
     if n.kind == "entity":
@@ -399,10 +401,15 @@ def _conflict_card(c) -> str:
     )
 
 
-def _compiled_preview(m, dialect: str, project: str = "your-gcp-project",
+def _compiled_preview(m, by_name: dict, project: str = "your-gcp-project",
                       dataset: str = "jaffle_shop") -> tuple[str, str]:
-    duck_c = SimpleCompiler(dialect="duckdb").compile(m, m.dimensions[:1])
-    bq_c = SimpleCompiler(dialect="bigquery").compile(m, m.dimensions[:1])
+    dims = m.dimensions[:1]
+    if m.metric_type == "simple":
+        duck_c = SimpleCompiler(dialect="duckdb").compile(m, dims)
+        bq_c = SimpleCompiler(dialect="bigquery").compile(m, dims)
+    else:
+        duck_c = SimpleCompiler(dialect="duckdb").compile_derived(m, by_name, dims)
+        bq_c = SimpleCompiler(dialect="bigquery").compile_derived(m, by_name, dims)
     try:
         bq_sql = render_sql(bq_c.sql, bq_c.params, project, dataset)
     except Exception:
@@ -722,9 +729,10 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
         bq_proj = getattr(svc.wh, "project", "") or "your-gcp-project"
         bq_ds = getattr(svc.wh, "dataset", "jaffle_shop")
 
+        cert_by_name = {m.name: m for m in cert_metrics}
         cert_rows = []
         for m in cert_metrics:
-            duck_sql, bq_sql = _compiled_preview(m, wh_dialect, bq_proj, bq_ds)
+            duck_sql, bq_sql = _compiled_preview(m, cert_by_name, bq_proj, bq_ds)
             cert_rows.append(
                 f'<tr data-filterable>'
                 f'<td><b class="def-name">{e(m.name)}</b> <span class="badge badge-ok">v{m.version}</span>'
