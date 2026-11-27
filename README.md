@@ -1,5 +1,7 @@
 # ARTH: Semantic Layer
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/RiturajSingh2004/arth-semlayer/blob/main/notebooks/certified_bigquery_mcp.ipynb)
+
 Repository: `arth-semlayer` · Python package and command: `semlayer`
 
 Governed semantic layer between AI agents and your data. Definitions are drafted automatically from your schema and query log, humans certify them, and agents can only use certified ones.
@@ -76,10 +78,16 @@ uv run semlayer drift --values
 uv run semlayer feedback
 ```
 
+## Integrations & Examples
+- **Interactive Colab / Vertex AI Notebook:** [`notebooks/certified_bigquery_mcp.ipynb`](notebooks/certified_bigquery_mcp.ipynb) ([Open in Colab](https://colab.research.google.com/github/RiturajSingh2004/arth-semlayer/blob/main/notebooks/certified_bigquery_mcp.ipynb)) — self-contained walkthrough connecting Gemini (`google-genai` on Vertex AI) to the governed MCP server over BigQuery MCP with an offline DuckDB toggle.
+- **Google ADK Agent (`McpToolset` + FastAPI / Cloud Run):** [`examples/adk_agent/`](examples/adk_agent/README.md) — standalone deployable ADK `LlmAgent` wired to the governed stdio MCP server with Dockerfile and 27 offline tests (`cd examples/adk_agent && uv sync --dev && uv run pytest`).
+
 ## Layout
 ```
 src/semlayer/  core warehouse ingest lineage draft conflicts registry compiler graph policy monitor serve cli evaluate demo
 examples/jaffle_shop/   seed.py (data + query log with deliberate conflicts)
+examples/adk_agent/     Google ADK LlmAgent + governed MCP server + Dockerfile
+notebooks/              certified_bigquery_mcp.ipynb (Vertex AI / Colab walkthrough)
 eval/                   questions.yaml, heldout.yaml (+ generators)
 definitions/            the registry (YAML, Git-friendly)
 scripts/                manual_run.sh, mcp_check.py, bq_seed.py
@@ -89,3 +97,5 @@ tests/
 
 ## Docs
 PLAN.md · ARCHITECTURE.md · ADR.md · EVAL.md · SECURITY.md · GEMINI.md
+
+<!-- mcp-name: io.github.RiturajSingh2004/arth-semlayer -->

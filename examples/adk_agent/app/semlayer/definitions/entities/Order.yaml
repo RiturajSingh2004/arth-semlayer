@@ -1,0 +1,16 @@
+name: Order
+description: Customer order record in jaffle_shop.
+state: certified
+owner: data-team
+approvers: []
+version: 1
+evidence:
+  queries: []
+  lineage: []
+  explanation: table orders
+  usage: 0
+  users: []
+  suggested_owner: null
+  source: schema
+table: orders
+key: id

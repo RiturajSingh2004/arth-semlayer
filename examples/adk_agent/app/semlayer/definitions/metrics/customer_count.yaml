@@ -1,0 +1,27 @@
+name: customer_count
+description: Total number of customer records, optionally grouped or filtered by region.
+state: certified
+owner: carol
+approvers: []
+version: 1
+evidence:
+  queries:
+  - SELECT COUNT(*) AS customer_count FROM customers
+  - SELECT region, COUNT(*) AS customer_count FROM customers GROUP BY region
+  lineage:
+  - customers.region
+  explanation: Computes total customer count in the customers table.
+  usage: 3
+  users:
+  - carol
+  suggested_owner: carol
+  source: query_log
+concept: customer_count
+table: customers
+agg: count
+column: '*'
+filters: []
+dimensions:
+- region
+entity: null
+entity_key: null

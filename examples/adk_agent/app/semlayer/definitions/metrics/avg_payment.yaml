@@ -1,0 +1,27 @@
+name: avg_payment
+description: Average monetary amount of successful payment transactions (USD).
+state: certified
+owner: carol
+approvers: []
+version: 1
+evidence:
+  queries:
+  - SELECT AVG(amount) AS avg_payment FROM payments WHERE status = 'success'
+  lineage:
+  - payments.amount
+  - payments.status
+  explanation: Computes average payment amount across successful payments.
+  usage: 3
+  users:
+  - carol
+  suggested_owner: carol
+  source: query_log
+concept: avg_payment
+table: payments
+agg: avg
+column: amount
+filters:
+- status = 'success'
+dimensions: []
+entity: null
+entity_key: null

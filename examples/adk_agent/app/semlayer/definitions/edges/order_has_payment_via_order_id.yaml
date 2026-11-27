@@ -1,0 +1,21 @@
+name: order_has_payment_via_order_id
+description: Order to Payment foreign-key edge.
+state: certified
+owner: data-team
+approvers: []
+version: 1
+evidence:
+  queries: []
+  lineage:
+  - orders.id
+  - payments.order_id
+  explanation: payments.order_id references orders.id
+  usage: 0
+  users: []
+  suggested_owner: null
+  source: schema
+src: Order
+rel: HAS_PAYMENT
+dst: Payment
+src_key: id
+dst_key: order_id

@@ -1,0 +1,29 @@
+name: revenue
+description: Total successful payment amount (USD).
+state: certified
+owner: alice
+approvers: []
+version: 2
+evidence:
+  queries:
+  - SELECT SUM(amount) AS revenue FROM payments WHERE status = 'success'
+  - SELECT method, SUM(amount) AS revenue FROM payments WHERE status = 'success' GROUP BY method
+  lineage:
+  - payments.amount
+  - payments.status
+  explanation: Computes total revenue collected from successful payments.
+  usage: 9
+  users:
+  - alice
+  suggested_owner: alice
+  source: query_log
+concept: revenue
+table: payments
+agg: sum
+column: amount
+filters:
+- status = 'success'
+dimensions:
+- method
+entity: Customer
+entity_key: customer_id

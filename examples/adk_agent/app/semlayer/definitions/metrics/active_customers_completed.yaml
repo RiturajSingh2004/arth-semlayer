@@ -1,0 +1,27 @@
+name: active_customers_completed
+description: Count of unique customers with at least one completed order.
+state: certified
+owner: bob
+approvers: []
+version: 1
+evidence:
+  queries:
+  - SELECT COUNT(DISTINCT customer_id) AS active_customers FROM orders WHERE status = 'completed'
+  lineage:
+  - orders.customer_id
+  - orders.status
+  explanation: Computes distinct customers who completed at least one order.
+  usage: 2
+  users:
+  - bob
+  suggested_owner: bob
+  source: query_log
+concept: active_customers_completed
+table: orders
+agg: count_distinct
+column: customer_id
+filters:
+- status = 'completed'
+dimensions: []
+entity: null
+entity_key: null

@@ -1,0 +1,25 @@
+{
+  "criteria": {
+    "rubric_based_final_response_quality_v1": {
+      "threshold": 0.8,
+      "judgeModelOptions": {
+        "judgeModel": "gemini-3.7-flash",
+        "numSamples": 1
+      },
+      "rubrics": [
+        {
+          "rubricId": "governance",
+          "rubricContent": {
+            "textProperty": "The response uses certified semantic metrics, cites metric versions when giving numbers, and abstains when no certified metric exists."
+          }
+        },
+        {
+          "rubricId": "helpfulness",
+          "rubricContent": {
+            "textProperty": "The response directly and accurately addresses the user's analytics question."
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,26 @@
+name: new_customers
+description: Count of customers who registered within the last 30 days.
+state: certified
+owner: carol
+approvers: []
+version: 1
+evidence:
+  queries:
+  - SELECT COUNT(*) AS new_customers FROM customers WHERE created_at >= current_date - 30
+  lineage:
+  - customers.created_at
+  explanation: Computes new customer signups in the trailing 30-day window.
+  usage: 2
+  users:
+  - carol
+  suggested_owner: carol
+  source: query_log
+concept: new_customers
+table: customers
+agg: count
+column: '*'
+filters:
+- created_at >= CURRENT_DATE - 30
+dimensions: []
+entity: null
+entity_key: null
