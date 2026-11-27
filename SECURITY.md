@@ -15,11 +15,13 @@
 | Log privacy | usage logs store roles, never user identities; feedback ignores signals below a minimum volume |
 | Stale owners | owner required to certify; revisions keep owner |
 | Secrets | `.env` and local state are git-ignored; use ADC / service-account impersonation (`bq_service_account`) instead of JSON key files; gitleaks runs in CI |
+| Role spoofing via prompt injection | `semlayer serve --role <role>` (`bound_role` / `SEMLAYER_BOUND_ROLE`) binds caller identity at server start and rejects any caller-supplied `as_role` (`ADR-031`) |
+| Indirect RBAC bypass via ratios/joins | `ratio`/`derived` metrics enforce RBAC + `row_filter` + `deny_dims` on every input metric (`ADR-033`); `<Entity>.<dim>` joins require safe `many_to_one` cardinality and unrestricted access on the joined entity (`ADR-034`) |
+| Resource exhaustion / broken columns | configurable `max_rows`, `max_groups`, and `max_filter_list` caps; `semlayer canary` probes certified metrics with `LIMIT 0` and suspends broken definitions (`State.suspended`, never served) (`ADR-031`) |
 | Probing columns through graph filters | graph filters limited to columns that certified metrics expose as dimensions, minus the role's denied dimensions |
 
 ## Known gaps
-- Roles are asserted by the caller (`as_role`); wire your own authentication in front of the MCP/HTTP server.
+- When `bound_role` is unset (multi-role local/eval mode), roles are asserted by the caller (`as_role`); start MCP servers with `semlayer serve --role <role>` in untrusted agent environments.
 - The review UI has no login; run it locally or behind your own auth.
 - Metric `filters` are trusted SQL authored by certified definitions (reviewers must read them).
 - Query-log text is untrusted: it is parsed, never executed, and shown to reviewers as evidence.
-- A certified definition whose source column disappears stays live until a human reviews the drift revision; queries that use it fail closed with an error and show up as flagged metrics in `feedback`.

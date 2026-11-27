@@ -73,7 +73,11 @@ uv run semlayer certify revenue --accept-suggested
 uv run semlayer rule-add finance_all --role finance
 uv run semlayer rule-add eu_customers --role eu_analyst --metric customer_count --row-filter "region = 'EU'"
 uv run semlayer certify finance_all --kind rule --owner security
-uv run semlayer edit revenue entity=Customer entity_key=customer_id
+uv run semlayer edit revenue entity=Customer entity_key=customer_id time_dimension=paid_at synonyms=sales,turnover
+uv run semlayer metric-add aov --type ratio --numerator revenue --denominator order_count --dimensions method
+uv run semlayer certify aov --owner alice
+uv run semlayer canary                          # probes certified metrics (LIMIT 0); suspends broken ones
+uv run semlayer serve --role finance            # strict role-bound MCP server (rejects caller as_role)
 uv run semlayer drift --values
 uv run semlayer feedback
 ```

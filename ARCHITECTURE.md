@@ -33,29 +33,29 @@ agent ──MCP (stdio)──► semlayer (local: certified metrics, graph, poli
 | cli, evaluate, demo | entry points; eval arms: layer, baseline, baseline-hints (stops on LLM quota/transport errors) |
 
 ## Data model
-- **Metric:** name, concept, table, agg, column, filters, dimensions, entity + entity_key, owner, version, state, evidence
-- **Entity / Edge:** table-backed entity (key column); edge `src.src_key = dst.dst_key` with a relationship name
+- **Metric:** name, `metric_type` (`simple` | `ratio` | `derived`), concept, table, agg, column, `numerator`/`denominator` or `formula` (restricted arithmetic AST), filters, dimensions, `time_dimension`/`time_dimensions`, `synonyms`, entity + entity_key, owner, version, state, evidence
+- **Entity / Edge:** table-backed entity (key column); edge `src.src_key = dst.dst_key` with a relationship name and `cardinality` (`one_to_many` | `many_to_one` | `one_to_one` | `many_to_many`)
 - **Rule:** role, metric (or `*`), effect, row_filter, deny_dims
 - **Evidence:** source queries, lineage, explanation, usage, users, suggested owner
-- **States:** `draft → certified → deprecated`; certified definitions are revised via a *pending* copy, which is diffed and re-certified (version +1)
+- **States:** `draft → certified ↔ suspended → deprecated`; certified definitions are revised via a *pending* copy, which is diffed and re-certified (version +1); `semlayer canary` moves broken certified definitions to `suspended` (never served)
 
 ## Registry layout
 ```
-definitions/metrics|entities|edges|rules/<name>.yaml   # live (draft/certified/deprecated)
+definitions/metrics|entities|edges|rules/<name>.yaml   # live (draft/certified/suspended/deprecated)
 definitions/_pending/<kind>/<name>.yaml                # revisions awaiting certification
 definitions/_state/audit.jsonl                         # who did what (commit this)
-definitions/_state/{index.db,usage.jsonl,...}          # local, git-ignored
+definitions/_state/{index.db,usage.jsonl,...}          # local SQLite + FTS5 index, git-ignored
 ```
 
 ## Invariants
-1. Agents get certified definitions only; drafts, pending revisions and deprecated ones are never served.
+1. Agents get certified definitions only; drafts, pending revisions, suspended and deprecated ones are never served.
 2. Every answer carries metric name, version and owner.
-3. Policy is checked on every query: default deny, certified rules only.
-4. Dimensions and filters are limited to what the certified definition lists; values are bound parameters on DuckDB and validated `sqlglot` AST literal nodes on BigQuery MCP. A dimension pinned by an equality filter is not grouped.
+3. Policy is checked on every query (including every transitive dependency of `ratio`/`derived` metrics): default deny, certified rules only. When `serve --role` (`bound_role`) is set, caller-supplied `as_role` is rejected.
+4. Dimensions and filters are limited to certified dimensions and unique shortest `many_to_one`/`one_to_one` edge joins (`one_to_many` fan-out joins are refused); values are bound parameters on DuckDB and validated `sqlglot` AST literal nodes on BigQuery MCP. A dimension pinned by an equality filter is not grouped.
 5. Graph filters are limited to columns that certified metrics expose as dimensions, minus the role's denied dimensions; traversal needs an allow-all role.
 6. LLMs and heuristics propose; humans certify (the `demo` command is the labelled exception).
-7. YAML is the source of truth; the SQLite index can be deleted and rebuilt.
+7. YAML is the source of truth; the SQLite + FTS5 index can be deleted and rebuilt.
 8. Eval traffic is not written to the usage log, sensitive column values are omitted from eval prompts, and LLM transport/quota errors stop an eval run without reporting a score.
 
 ## MCP tools
-`list_metrics`, `describe_metric`, `query_metric(metric, as_role, dims, filters, entity_keys)`, `describe_graph`, `traverse_graph(start, path, as_role, filters)`, `report_gap(question, as_role, reason)`, `report_issue`. There is no raw-SQL tool.
+`list_metrics(limit, offset)`, `search_metrics(query, k)`, `describe_metric(name)`, `query_metric(metric, as_role, dims, filters, entity_keys, time_grain, time_range, order_by, limit)`, `query_metrics(metrics, ...)`, `describe_graph()`, `traverse_graph(start, path, as_role, filters)`, `report_gap(question, as_role, reason)`, `report_issue(metric, note, as_role)`. There is no raw-SQL tool.

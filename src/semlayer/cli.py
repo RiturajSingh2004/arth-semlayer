@@ -5,7 +5,7 @@ import os
 import sys
 
 from semlayer.conflicts import apply_pick, apply_split, detect
-from semlayer.core import KINDS, Config, Rule, State, load_dotenv, make_llm
+from semlayer.core import KINDS, Config, Metric, Rule, State, load_dotenv, make_llm
 from semlayer.draft import draft_metrics
 from semlayer.graph import draft_graph
 from semlayer.ingest import Query, dbt_docs, read_query_log, schema_snapshot
@@ -15,13 +15,14 @@ from semlayer.monitor import (
     propose_revisions,
     read_usage,
     record_value,
+    run_canary,
     schema_drift,
 )
 from semlayer.policy import replay, suggest_rules
 from semlayer.registry import Registry
 from semlayer.warehouse import make_warehouse
 
-LISTY = {"dimensions", "filters", "approvers", "deny_dims"}
+LISTY = {"dimensions", "time_dimensions", "synonyms", "filters", "approvers", "deny_dims"}
 
 
 def _wh(cfg: Config, read_only: bool = True):
@@ -149,13 +150,60 @@ def cmd_rule_add(a, cfg, reg):
     print(reg.put_draft(rule), a.name)  # certify it like any other definition
 
 
+def cmd_metric_add(a, cfg, reg):
+    try:
+        m = Metric(
+            name=a.name,
+            metric_type=a.type,
+            concept=a.concept or a.name,
+            description=a.description,
+            table=a.table,
+            agg=a.agg,
+            column=a.column,
+            numerator=a.numerator,
+            denominator=a.denominator,
+            formula=a.formula,
+            dimensions=[d for d in a.dimensions.split(",") if d],
+            time_dimension=a.time_dimension or None,
+            synonyms=[s for s in a.synonyms.split(",") if s],
+        )
+    except ValueError as e:
+        sys.exit(f"invalid metric: {e}")
+    try:
+        tag = reg.put_draft(m)
+    except ValueError as e:
+        sys.exit(f"invalid metric: {e}")
+    print(tag, a.name)
+
+
+def cmd_canary(a, cfg, reg):
+    wh = _wh(cfg)
+    try:
+        res = run_canary(reg, wh, suspend=not a.dry_run, by=a.by)
+    finally:
+        wh.close()
+    print(json.dumps(res, indent=2))
+    if res["failed"]:
+        sys.exit(1)
+
+
 def cmd_reindex(a, cfg, reg):
     reg.reindex()
     print("indexed:", {k: len(reg.list(k)) for k in KINDS})
 
 def cmd_serve(a, cfg, reg):
     from semlayer.serve.service import Service
-    svc = Service(reg, _wh(cfg))
+
+    bound_role = a.role or os.environ.get("SEMLAYER_BOUND_ROLE") or cfg.bound_role
+    svc = Service(
+        reg,
+        _wh(cfg),
+        bound_role=bound_role,
+        timezone=cfg.timezone,
+        max_rows=cfg.max_rows,
+        max_groups=cfg.max_groups,
+        max_filter_list=cfg.max_filter_list,
+    )
     if a.web:
         import uvicorn
 
@@ -246,9 +294,17 @@ def main(argv=None):
     add("rule-add", cmd_rule_add, "name", role=dict(required=True), metric=dict(default="*"),
         effect=dict(default="allow", choices=["allow", "deny"]), row_filter=dict(default=None),
         deny_dims=dict(help="comma-separated", default=""))
+    add("metric-add", cmd_metric_add, "name",
+        type=dict(default="ratio", choices=["simple", "ratio", "derived"]),
+        concept=dict(default=""), description=dict(default=""),
+        table=dict(default=""), agg=dict(default=None, choices=["sum", "count", "count_distinct", "avg", "min", "max"]),
+        column=dict(default="*"), numerator=dict(default=None), denominator=dict(default=None),
+        formula=dict(default=None), dimensions=dict(default=""), time_dimension=dict(default=""),
+        synonyms=dict(default=""))
+    add("canary", cmd_canary, dry_run=dict(action="store_true"), by=dict(default="canary"))
     add("reindex", cmd_reindex)
     add("serve", cmd_serve, web=dict(action="store_true"), port=dict(type=int, default=8000),
-        host=dict(default="127.0.0.1"))
+        host=dict(default="127.0.0.1"), role=dict(default=None, help="bind caller role in strict mode"))
     add("drift", cmd_drift, values=dict(action="store_true"))
     add("feedback", cmd_feedback, min_volume=dict(type=int, default=3))
     add("policy-replay", cmd_policy)
