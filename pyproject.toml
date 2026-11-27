@@ -1,9 +1,18 @@
 [project]
 name = "arth-semlayer"
 version = "0.1.0"
-description = "Governed semantic layer between AI agents and your data: auto-draft, human certification, MCP serving."
+description = "Certification-gated semantic layer MCP server for BigQuery and DuckDB with default-deny RBAC."
 readme = "README.md"
 license = { text = "Apache-2.0" }
+authors = [{ name = "Rituraj Singh" }]
+keywords = ["mcp", "semantic-layer", "bigquery", "duckdb", "gemini", "rbac", "ai-agents"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Database",
+]
 requires-python = ">=3.12"
 dependencies = [
   "pydantic>=2.6",
@@ -24,6 +33,11 @@ dev = ["pytest>=8", "httpx>=0.27", "ruff>=0.5"]
 
 [project.scripts]
 semlayer = "semlayer.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/RiturajSingh2004/arth-semlayer"
+Repository = "https://github.com/RiturajSingh2004/arth-semlayer"
+Issues = "https://github.com/RiturajSingh2004/arth-semlayer/issues"
 
 [build-system]
 requires = ["hatchling"]
