@@ -145,6 +145,14 @@ def render_sql(sql: str, params: Sequence | None, project: str, dataset: str) ->
         if (isinstance(node, exp.Add) and isinstance(node.this, exp.CurrentDate)
                 and isinstance(node.expression, exp.Literal) and node.expression.is_int):
             return exp.DateAdd(this=exp.CurrentDate(), expression=node.expression.copy(), unit=exp.var("DAY"))
+        if isinstance(node, (exp.TimestampTrunc, exp.DateTrunc)):
+            raw_unit = (node.unit.name if node.unit else "").upper()
+            if raw_unit in {"DAY", "WEEK", "ISOWEEK", "MONTH", "QUARTER", "YEAR"}:
+                bq_unit = "ISOWEEK" if raw_unit == "WEEK" else raw_unit
+                target = node.this.copy()
+                if not isinstance(target, exp.Cast):
+                    target = exp.Cast(this=target, to=exp.DataType.build("DATE"))
+                return exp.DateTrunc(this=target, unit=exp.var(bq_unit))
         return node
 
     tree = tree.transform(_rewrite_dates)
