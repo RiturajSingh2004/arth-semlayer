@@ -100,12 +100,44 @@ h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.015em; margin: 38px 0
 .sec-sub { color: var(--text-secondary); font-size: 13.5px; margin: 0 0 16px; }
 
 /* Stat strip */
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 12px; margin-bottom: 28px; }
-.stat { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 9px; padding: 13px 15px; }
-.stat-k { font-size: 11.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
-.stat-v { font-size: 22px; font-weight: 700; color: var(--text-primary); margin-top: 3px; font-family: var(--mono); }
+.hero-card { background: radial-gradient(ellipse at 0% 0%, rgba(232, 101, 43, 0.11), transparent 55%), var(--bg-surface); border: 1px solid var(--border-strong); border-radius: 14px; padding: 22px 24px 20px; margin-bottom: 20px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25); }
+.hero-top { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.status-pill { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--bg-elevated); color: var(--text-primary); margin-bottom: 10px; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.status-dot.warn { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+.status-dot.err { background: var(--err); box-shadow: 0 0 8px var(--err); }
+.btn-ghost { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--bg-elevated); color: var(--text-primary); font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all 0.14s; }
+.btn-ghost:hover { background: var(--bg-hover); border-color: rgba(232, 101, 43, 0.45); color: var(--accent-bright); }
+.ws-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 22px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.ws-tab { padding: 6px 13px; border-radius: 999px; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); background: var(--bg-surface); border: 1px solid var(--border); cursor: pointer; transition: all 0.14s; }
+.ws-tab:hover { color: var(--text-primary); border-color: var(--border-strong); }
+.ws-tab.active { background: var(--bg-accent-dim); color: var(--accent-bright); border-color: rgba(232, 101, 43, 0.45); }
+.sec-hidden { display: none !important; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 12px; margin-bottom: 22px; }
+.stat { display: block; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; transition: transform 0.15s, border-color 0.15s, background 0.15s; }
+.stat:hover { transform: translateY(-2px); border-color: rgba(232, 101, 43, 0.45); background: var(--bg-elevated); }
+.stat-k { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+.stat-v { font-size: 23px; font-weight: 700; color: var(--text-primary); margin-top: 4px; font-family: var(--mono); }
 .stat-v.accent { color: var(--accent-bright); }
-.stat-sub { font-size: 11.5px; color: var(--text-secondary); margin-top: 2px; }
+.stat-v.ok { color: var(--ok); }
+.stat-v.err { color: var(--err); }
+.stat-sub { font-size: 11.5px; color: var(--text-secondary); margin-top: 3px; }
+.preset-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-bottom: 14px; padding: 11px 14px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; }
+.preset-label { font-size: 11.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-right: 4px; }
+.preset-btn { font-size: 12px; padding: 5px 10px; border-radius: 999px; background: var(--bg-elevated); border: 1px solid var(--border-strong); color: var(--text-secondary); font-weight: 500; transition: all 0.14s; }
+.preset-btn:hover { color: var(--text-primary); border-color: var(--accent); background: var(--bg-accent-dim); }
+.preset-btn.danger-chip:hover { color: var(--err); border-color: var(--err); background: var(--err-bg); }
+.adv-box { margin: 10px 0 12px; padding: 9px 12px; background: #100e0d; border: 1px solid var(--border); border-radius: 8px; }
+.adv-box summary { color: var(--text-secondary); font-size: 12px; font-weight: 600; }
+.adv-box[open] summary { margin-bottom: 10px; color: var(--accent-bright); }
+.empty-card { background: var(--bg-surface); border: 1px dashed var(--border-strong); border-radius: 10px; padding: 20px 22px; color: var(--text-secondary); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.empty-card strong { color: var(--text-primary); }
+.pre-wrap { position: relative; }
+.copy-btn { position: absolute; top: 6px; right: 6px; font-size: 11px; padding: 3px 8px; border-radius: 5px; background: rgba(27, 24, 23, 0.92); border: 1px solid var(--border-strong); color: var(--text-secondary); opacity: 0.78; }
+.copy-btn:hover { opacity: 1; color: var(--accent-bright); border-color: var(--accent); }
+.toast { position: fixed; bottom: 22px; right: 24px; z-index: 60; padding: 10px 16px; border-radius: 8px; background: var(--bg-elevated); border: 1px solid rgba(232, 101, 43, 0.45); color: var(--text-primary); font-size: 13px; font-weight: 600; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); opacity: 0; transform: translateY(10px); pointer-events: none; transition: all 0.2s; }
+.toast.show { opacity: 1; transform: translateY(0); }
 
 /* Badges & Pills */
 .badge { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 5px; border: 1px solid var(--border-strong); background: var(--bg-elevated); color: var(--text-secondary); white-space: nowrap; }
@@ -296,6 +328,90 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     node.addEventListener("mouseenter", update);
     node.addEventListener("click", update);
+  });
+
+  /* 6. Workspace section filter tabs + sidebar sync */
+  const wsTabs = document.querySelectorAll("[data-ws-tab]");
+  const wsSections = document.querySelectorAll("section[data-ws-group]");
+  function setWsTab(group) {
+    wsTabs.forEach((b) => b.classList.toggle("active", b.dataset.wsTab === group));
+    wsSections.forEach((sec) => {
+      const groups = (sec.dataset.wsGroup || "").split(" ");
+      sec.classList.toggle("sec-hidden", group !== "all" && !groups.includes(group));
+    });
+  }
+  wsTabs.forEach((btn) => btn.addEventListener("click", () => setWsTab(btn.dataset.wsTab)));
+  document.querySelectorAll("#view-governance .sidebar .nav-link, .stat[href^='#'], .btn-ghost[href^='#']").forEach((lnk) => {
+    lnk.addEventListener("click", () => setWsTab("all"));
+  });
+
+  /* 7. One-click Playground Presets */
+  document.querySelectorAll("[data-preset]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const cfg = JSON.parse(btn.dataset.preset || "{}");
+      if (cfg.kind === "traverse") {
+        const f = document.getElementById("form-traverse");
+        if (!f) return;
+        ["start", "path", "as_role", "filters"].forEach((k) => {
+          const el = f.querySelector(`[name="${k}"]`);
+          if (el && !el.disabled && cfg[k] !== undefined) el.value = cfg[k];
+        });
+        f.requestSubmit();
+      } else {
+        const f = document.getElementById("form-query");
+        if (!f) return;
+        ["metric", "as_role", "dims", "filters", "time_grain", "time_range", "order_by", "limit", "entity_keys"].forEach((k) => {
+          const el = f.querySelector(`[name="${k}"]`);
+          if (el && !el.disabled) el.value = cfg[k] || "";
+        });
+        const adv = document.getElementById("query-adv");
+        if (adv && (cfg.time_grain || cfg.time_range || cfg.order_by || cfg.limit)) adv.open = true;
+        f.requestSubmit();
+      }
+      const out = document.getElementById("runner-output");
+      if (out) out.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  });
+
+  /* 8. Copy-to-clipboard buttons on SQL/DDL <pre> blocks + HTMX toast */
+  function attachCopyButtons(root) {
+    (root || document).querySelectorAll("pre").forEach((pre) => {
+      if (pre.parentElement && pre.parentElement.classList.contains("pre-wrap")) return;
+      const wrap = document.createElement("div");
+      wrap.className = "pre-wrap";
+      pre.parentNode.insertBefore(wrap, pre);
+      wrap.appendChild(pre);
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "copy-btn";
+      b.textContent = "Copy";
+      b.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(pre.textContent || "");
+          b.textContent = "Copied!";
+          setTimeout(() => { b.textContent = "Copy"; }, 1400);
+        } catch (_) {}
+      });
+      wrap.appendChild(b);
+    });
+  }
+  attachCopyButtons(document);
+
+  const toast = document.getElementById("toast");
+  function showToast(msg) {
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => toast.classList.remove("show"), 2400);
+  }
+  document.body.addEventListener("htmx:afterSwap", (ev) => {
+    attachCopyButtons(ev.detail.target);
+    if (ev.detail.target && ev.detail.target.id === "runner-output") {
+      showToast("Executed governed request");
+    } else {
+      showToast("Governance state updated");
+    }
   });
 });
 </script>"""
@@ -722,12 +838,20 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
             _row(n, diff_text=reg.diff(k, n.name) if n.version else "")
             for k, n in q_items
         )
-        empty = '<tr><td colspan=5><i>No pending drafts or revisions in queue.</i></td></tr>'
+        empty = (
+            '<tr><td colspan=5><div class="empty-card"><div><strong>Review queue is clear</strong> · '
+            'No pending drafts or drift revisions awaiting sign-off.</div>'
+            '<span class="badge badge-ok">All certified</span></div></td></tr>'
+        )
 
         detected = detect(reg.list("metric"))
         conflicts_html = (
             f'<div class="card-grid">{"".join(_conflict_card(c) for c in detected)}</div>'
-            if detected else '<p class="empty-note">None — no variant or duplicate metric logic detected.</p>'
+            if detected else (
+                '<div class="empty-card"><div><strong>Zero metric conflicts</strong> · '
+                'No duplicate logic or competing variant definitions detected.</div>'
+                '<span class="badge badge-ok">Clean</span></div>'
+            )
         )
 
         cert_metrics = reg.certified("metric")
@@ -789,7 +913,7 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
             for sm in susp_metrics
         )
         susp_section = (
-            f"<section id='sec-suspended'><h2>Suspended metrics <span class='badge badge-err'>{len(susp_metrics)}</span></h2>"
+            f"<section id='sec-suspended' data-ws-group='review'><h2>Suspended metrics <span class='badge badge-err'>{len(susp_metrics)}</span></h2>"
             f"<p class='sec-sub'>Automatically quarantined by <code>semlayer canary</code> (never served to agents until fixed and re-certified).</p>"
             f"<div class='table-wrap'><table><tr><th>metric</th><th>logic</th><th>suspend reason</th><th>action</th></tr>"
             f"{susp_rows}</table></div></section>"
@@ -880,6 +1004,30 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
             else f"<div class='form-row'><label>As role</label><select name='as_role'>{role_opts}</select></div>"
         )
 
+        status_dot_cls = "status-dot err" if susp_metrics else ("status-dot warn" if (q_items or detected) else "status-dot")
+        status_text = (
+            f"{len(susp_metrics)} suspended metric(s) quarantined"
+            if susp_metrics
+            else (
+                f"{len(q_items)} pending review · {len(detected)} conflict(s)"
+                if (q_items or detected)
+                else f"All {len(cert_metrics)} certified metrics healthy"
+            )
+        )
+        presets = [
+            ("Revenue by method", {"metric": "revenue", "as_role": "finance", "dims": "method"}, False),
+            ("EU row_filter", {"metric": "customer_count", "as_role": "eu_analyst"}, False),
+            ("RBAC deny test", {"metric": "revenue", "as_role": "eu_analyst"}, True),
+            ("M:1 join (Customer.region)", {"metric": "revenue", "as_role": "finance", "dims": "Customer.region"}, False),
+            ("1:N fan-out trap", {"metric": "customer_count", "as_role": "finance", "dims": "Order.status"}, True),
+            ("Traverse returned orders", {"kind": "traverse", "start": "Customer", "path": "HAS_ORDER", "as_role": "finance", "filters": "Order.status=returned"}, False),
+        ]
+        preset_btns = "".join(
+            f"<button type='button' class='preset-btn{' danger-chip' if is_d else ''}' "
+            f"data-preset='{e(json.dumps(cfg))}'>{e(label)}</button>"
+            for label, cfg, is_d in presets
+        )
+
         return (
             f"<!doctype html><html lang='en'><head><meta charset='utf-8'>"
             f"<meta name='viewport' content='width=device-width,initial-scale=1'>"
@@ -921,29 +1069,41 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
             f"<a class='nav-link' href='#sec-mcp'><span>MCP &amp; REST surface</span></a></div>"
             f"</aside>"
             f"<main class='content'>"
-            f"<div class='eyebrow'>Certification-Gated Semantic Layer · Lean v2 + GCP</div>"
-            f"<h1>ARTH: SemLayer · Review queue</h1>"
-            f"<p class='lead'>LLMs, query logs, and BigQuery <code>JOBS_BY_PROJECT</code> propose candidate definitions; "
-            f"humans certify ownership, filters, ratios, and RBAC rules here before any definition is exposed over MCP.</p>"
+            f"<div class='hero-card'><div class='hero-top'><div>"
+            f"<div class='status-pill'><span class='{status_dot_cls}'></span><span>{e(status_text)}</span></div>"
+            f"<h1>ARTH: SemLayer · Governance Console</h1>"
+            f"<p class='lead' style='margin-bottom:0'>Certify metrics, ratios, FK edges, and RBAC rules before agents touch your data. "
+            f"Use the workspace tabs below to focus, or launch a 1-click governed query test.</p>"
+            f"</div><div class='hero-actions'>"
+            f"<a class='btn-ghost' href='#sec-playground'>▶ Query Playground</a>"
+            f"<a class='btn-ghost' href='/?tab=system' data-tab-btn='system'>◈ System Diagram</a>"
+            f"</div></div></div>"
             f"<div class='stats'>"
-            f"<div class='stat'><div class='stat-k'>Pending review</div><div class='stat-v accent'>{len(q_items)}</div><div class='stat-sub'>drafts &amp; drift revisions</div></div>"
-            f"<div class='stat'><div class='stat-k'>Open conflicts</div><div class='stat-v'>{len(detected)}</div><div class='stat-sub'>variants &amp; duplicates</div></div>"
-            f"<div class='stat'><div class='stat-k'>Certified / Suspended</div><div class='stat-v'>{len(cert_metrics)} / {len(susp_metrics)}</div><div class='stat-sub'>served / canary-quarantined</div></div>"
-            f"<div class='stat'><div class='stat-k'>Graph topology</div><div class='stat-v'>{len(cert_entities)} / {len(cert_edges)}</div><div class='stat-sub'>entities / M:1 &amp; 1:N edges</div></div>"
-            f"<div class='stat'><div class='stat-k'>Active rules</div><div class='stat-v'>{len(cert_rules)}</div><div class='stat-sub'>default-deny + Dataplex PII</div></div>"
-            f"<div class='stat'><div class='stat-k'>Warehouse dialect</div><div class='stat-v'>{e(wh_dialect)}</div><div class='stat-sub'>execute_sql_readonly</div></div>"
+            f"<a class='stat' href='#sec-queue'><div class='stat-k'>Pending review</div><div class='stat-v accent'>{len(q_items)}</div><div class='stat-sub'>drafts &amp; drift revisions</div></a>"
+            f"<a class='stat' href='#sec-conflicts'><div class='stat-k'>Open conflicts</div><div class='stat-v'>{len(detected)}</div><div class='stat-sub'>variants &amp; duplicates</div></a>"
+            f"<a class='stat' href='#sec-metrics'><div class='stat-k'>Certified / Suspended</div><div class='stat-v {'err' if susp_metrics else 'ok'}'>{len(cert_metrics)} / {len(susp_metrics)}</div><div class='stat-sub'>served / canary-quarantined</div></a>"
+            f"<a class='stat' href='#sec-graph'><div class='stat-k'>Graph topology</div><div class='stat-v'>{len(cert_entities)} / {len(cert_edges)}</div><div class='stat-sub'>entities / M:1 &amp; 1:N edges</div></a>"
+            f"<a class='stat' href='#sec-policy'><div class='stat-k'>Active rules</div><div class='stat-v'>{len(cert_rules)}</div><div class='stat-sub'>default-deny + Dataplex PII</div></a>"
+            f"<a class='stat' href='#sec-mcp'><div class='stat-k'>Warehouse dialect</div><div class='stat-v'>{e(wh_dialect)}</div><div class='stat-sub'>execute_sql_readonly</div></a>"
             f"</div>"
-            f"<section id='sec-queue'>"
+            f"<div class='ws-tabs' role='tablist' aria-label='Console sections'>"
+            f"<button type='button' class='ws-tab active' data-ws-tab='all'>Overview (All)</button>"
+            f"<button type='button' class='ws-tab' data-ws-tab='review'>Review &amp; Conflicts ({len(q_items) + len(detected)})</button>"
+            f"<button type='button' class='ws-tab' data-ws-tab='catalog'>Catalog &amp; Policy ({len(cert_metrics)})</button>"
+            f"<button type='button' class='ws-tab' data-ws-tab='playground'>Playground &amp; Canary</button>"
+            f"<button type='button' class='ws-tab' data-ws-tab='ops'>Ops &amp; Audit</button>"
+            f"</div>"
+            f"<section id='sec-queue' data-ws-group='review'>"
             f"<div class='table-wrap'><table><tr><th>definition</th><th>logic &amp; description</th><th>usage</th>"
             f"<th>evidence &amp; diff</th><th>action</th></tr>{rows or empty}</table></div></section>"
             f"{susp_section}"
-            f"<section id='sec-conflicts'><h2>Conflicts</h2>"
+            f"<section id='sec-conflicts' data-ws-group='review'><h2>Conflicts</h2>"
             f"<p class='sec-sub'>Structural variant clusters (same concept name, different SQL filter/agg) and duplicate logic under distinct aliases.</p>"
             f"{conflicts_html}</section>"
-            f"<section id='sec-metrics'><h2>Certified metrics</h2>"
+            f"<section id='sec-metrics' data-ws-group='catalog'><h2>Certified metrics</h2>"
             f"<p class='sec-sub'>Live governed definitions (simple, ratio, derived) exposed via <code>list_metrics</code>, <code>search_metrics</code>, <code>describe_metric</code>, and <code>query_metric(s)</code>.</p>"
             f"{cert_section}</section>"
-            f"<section id='sec-graph'><h2>Entity graph &amp; foreign-key edges</h2>"
+            f"<section id='sec-graph' data-ws-group='catalog'><h2>Entity graph &amp; foreign-key edges</h2>"
             f"<p class='sec-sub'>Certified join topology powering safe M:1 dimension joins (blocking 1:N fan-out) and multi-hop <code>traverse_graph</code> entity-set filters.</p>"
             f"<div class='card-grid'>"
             f"<div class='table-wrap'><table><tr><th>entity</th><th>table</th><th>PK</th><th>owner</th></tr>"
@@ -951,30 +1111,33 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
             f"<div class='table-wrap'><table><tr><th>relationship</th><th>join condition</th><th>cardinality</th><th>ver</th></tr>"
             f"{edge_rows or '<tr><td colspan=4><i>No certified edges</i></td></tr>'}</table></div>"
             f"</div></section>"
-            f"<section id='sec-policy'><h2>Access policy rules (default deny)</h2>"
+            f"<section id='sec-policy' data-ws-group='catalog'><h2>Access policy rules (default deny)</h2>"
             f"<p class='sec-sub'>Only certified rules apply; explicit <code>DENY</code> overrides <code>ALLOW</code>; restricted &amp; Dataplex policy-tagged dimensions cannot be grouped or filtered.</p>"
             f"<div class='table-wrap'><table><tr><th>rule</th><th>role</th><th>metric</th><th>effect</th><th>row_filter</th><th>deny_dims</th></tr>"
             f"{rule_rows}</table></div></section>"
-            f"<section id='sec-playground'><h2>Interactive governed query &amp; graph runner</h2>"
-            f"<p class='sec-sub'>Test time grains, range filters, M:1 joins (<code>Customer.region</code>), ratios, row filters, and compiled SQL through <code>Service</code>.</p>"
+            f"<section id='sec-playground' data-ws-group='playground'><h2>Interactive governed query &amp; graph runner</h2>"
+            f"<p class='sec-sub'>Click a preset below or enter custom parameters to test RBAC, row filters, M:1 joins, fan-out refusal, and compiled SQL through <code>Service</code>.</p>"
+            f"<div class='preset-bar'><span class='preset-label'>1-Click Scenarios:</span>{preset_btns}</div>"
             f"<div class='playground-grid'>"
             f"<div class='card'><div class='card-head'><span class='card-title'>Run <code>query_metric</code></span><span class='badge badge-orange'>QuerySpec AST</span></div>"
-            f"<form hx-post='/ui/query' hx-target='#runner-output' hx-swap='innerHTML' method='post' action='/ui/query'>"
+            f"<form id='form-query' hx-post='/ui/query' hx-target='#runner-output' hx-swap='innerHTML' method='post' action='/ui/query'>"
             f"<div class='form-row'><label>Metric</label><select name='metric'>{metric_opts or '<option value=\"\">(certify a metric first)</option>'}</select></div>"
             f"{role_field_q}"
             f"<div class='form-row'><label>Dimensions</label><input name='dims' placeholder='e.g. method, Customer.region'></div>"
+            f"<div class='form-row'><label>Filters</label><input name='filters' placeholder='col=val or JSON {{&quot;method&quot;:{{&quot;in&quot;:[&quot;card&quot;]}}}}'></div>"
+            f"<details id='query-adv' class='adv-box'><summary>Advanced: time grain, range, order, limit &amp; entity keys</summary>"
             f"<div class='form-row'><label>Time grain</label><select name='time_grain'>"
             f"<option value=''>none</option><option value='day'>day</option><option value='week'>week (ISO Mon)</option>"
             f"<option value='month'>month</option><option value='quarter'>quarter</option><option value='year'>year</option></select></div>"
             f"<div class='form-row'><label>Time range</label><input name='time_range' placeholder='e.g. last_30_days or 2024-01-01..2024-03-01'></div>"
-            f"<div class='form-row'><label>Filters</label><input name='filters' placeholder='col=val or JSON {{&quot;method&quot;:{{&quot;in&quot;:[&quot;card&quot;]}}}}'></div>"
             f"<div class='form-row'><label>Order / Limit</label><div class='act-inline' style='flex:1'>"
             f"<input name='order_by' placeholder='e.g. -revenue' style='flex:1'>"
             f"<input name='limit' placeholder='limit' style='width:84px'></div></div>"
             f"<div class='form-row'><label>Entity keys</label><input name='entity_keys' placeholder='optional, e.g. 4, 5, 6'></div>"
+            f"</details>"
             f"<button class='btn-primary' type='submit'>execute governed metric</button></form></div>"
             f"<div class='card'><div class='card-head'><span class='card-title'>Run <code>traverse_graph</code></span><span class='badge badge-orange'>MCP tool</span></div>"
-            f"<form hx-post='/ui/traverse' hx-target='#runner-output' hx-swap='innerHTML' method='post' action='/ui/traverse'>"
+            f"<form id='form-traverse' hx-post='/ui/traverse' hx-target='#runner-output' hx-swap='innerHTML' method='post' action='/ui/traverse'>"
             f"<div class='form-row'><label>Start entity</label><select name='start'>{entity_opts or '<option value=\"Customer\">Customer</option>'}</select></div>"
             f"<div class='form-row'><label>Rel path</label><input name='path' placeholder='e.g. HAS_ORDER'></div>"
             f"{role_field_t}"
@@ -986,23 +1149,23 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
             f"<label style='font-size:12px;color:var(--text-secondary)'><input type='checkbox' name='dry_run' value='1' checked> dry-run</label>"
             f"<button type='submit'>run canary probe</button></form></div></div>"
             f"</div><div id='runner-output' style='margin-top:14px'></div></section>"
-            f"<section id='sec-feedback'><h2>Drift, feedback &amp; BigQuery Materialized View advisor</h2>"
+            f"<section id='sec-feedback' data-ws-group='ops'><h2>Drift, feedback &amp; BigQuery Materialized View advisor</h2>"
             f"<div class='card-grid'>"
             f"<div class='card'><div class='card-head'><span class='card-title'>Top metric demand</span><span class='badge'>usage.jsonl</span></div><code>{e(demand_str)}</code></div>"
             f"<div class='card'><div class='card-head'><span class='card-title'>Clustered coverage gaps</span><span class='badge badge-warn'>report_gap</span></div><code>{e(gaps_str)}</code></div>"
             f"<div class='card'><div class='card-head'><span class='card-title'>Flagged metrics (&gt;20% error/issue)</span><span class='badge badge-err'>health</span></div><code>{e(flagged_str)}</code></div>"
             f"</div>{mv_html}</section>"
-            f"<section id='sec-audit'><h2>Audit trail</h2>"
+            f"<section id='sec-audit' data-ws-group='ops'><h2>Audit trail</h2>"
             f"<p class='sec-sub'>Append-only governance log from <code>definitions/_state/audit.jsonl</code> (mirrored to Cloud Logging JSON when <code>--log-json</code> is enabled).</p>"
             f"<div class='table-wrap'><table><tr><th>timestamp</th><th>action</th><th>target</th><th>actor</th><th>version &amp; edit ratio</th></tr>"
             f"{audit_rows}</table></div></section>"
-            f"<section id='sec-mcp'><h2>Agent MCP &amp; HTTP API reference</h2>"
+            f"<section id='sec-mcp' data-ws-group='ops'><h2>Agent MCP &amp; HTTP API reference</h2>"
             f"<div class='table-wrap'><table><tr><th>Surface</th><th>Tools / Endpoints</th></tr>"
             f"<tr><td><b class='def-name'>MCP Server (stdio)</b></td><td><code>list_metrics</code> · <code>search_metrics</code> · <code>describe_metric</code> · <code>query_metric</code> · <code>query_metrics</code> · <code>describe_graph</code> · <code>traverse_graph</code> · <code>report_gap</code> · <code>report_issue</code> (no raw SQL tool)</td></tr>"
             f"<tr><td><b class='def-name'>JSON REST API</b></td><td><code>GET /api/metrics</code> · <code>GET /api/queue</code> · <code>POST /api/certify/{{kind}}/{{name}}?owner=...</code></td></tr>"
             f"<tr><td><b class='def-name'>GCP &amp; Local Backends</b></td><td><code>DuckDBWarehouse</code> (bound parameters) · <code>BigQueryMCP</code> (<code>execute_sql_readonly</code> + <code>dryRun</code> + <code>JOBS_BY_PROJECT</code> + Dataplex Policy Tags) · Cloud Run + Secret Manager</td></tr>"
             f"</table></div></section>"
-            f"</main></div>{sys_html}</body></html>"
+            f"</main></div>{sys_html}<div id='toast' class='toast' role='status' aria-live='polite'></div></body></html>"
         )
 
     @app.post("/certify/{kind}/{name}", response_class=HTMLResponse)
