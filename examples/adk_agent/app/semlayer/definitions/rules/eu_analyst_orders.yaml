@@ -1,0 +1,19 @@
+name: eu_analyst_orders
+description: Allows eu_analyst to query certified order_count.
+state: certified
+owner: security-team
+approvers: []
+version: 1
+evidence:
+  queries: []
+  lineage: []
+  explanation: ''
+  usage: 0
+  users: []
+  suggested_owner: null
+  source: ''
+role: eu_analyst
+metric: order_count
+effect: allow
+row_filter: null
+deny_dims: []

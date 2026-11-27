@@ -1,0 +1,16 @@
+name: Payment
+description: Payment transaction record in jaffle_shop.
+state: certified
+owner: data-team
+approvers: []
+version: 1
+evidence:
+  queries: []
+  lineage: []
+  explanation: table payments
+  usage: 0
+  users: []
+  suggested_owner: null
+  source: schema
+table: payments
+key: id

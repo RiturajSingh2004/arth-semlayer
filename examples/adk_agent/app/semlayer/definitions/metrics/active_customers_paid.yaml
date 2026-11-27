@@ -1,0 +1,27 @@
+name: active_customers_paid
+description: Count of distinct customers who made at least one positive payment.
+state: certified
+owner: carol
+approvers: []
+version: 1
+evidence:
+  queries:
+  - SELECT COUNT(DISTINCT customer_id) AS active_customers FROM payments WHERE amount > 0
+  lineage:
+  - payments.amount
+  - payments.customer_id
+  explanation: Computes distinct customers with payment amount greater than zero.
+  usage: 1
+  users:
+  - carol
+  suggested_owner: carol
+  source: query_log
+concept: active_customers_paid
+table: payments
+agg: count_distinct
+column: customer_id
+filters:
+- amount > 0
+dimensions: []
+entity: null
+entity_key: null

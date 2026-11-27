@@ -1,0 +1,27 @@
+name: order_count
+description: Total number of orders placed, optionally grouped or filtered by order status.
+state: certified
+owner: bob
+approvers: []
+version: 1
+evidence:
+  queries:
+  - SELECT COUNT(*) AS order_count FROM orders
+  - SELECT status, COUNT(*) AS order_count FROM orders GROUP BY status
+  lineage:
+  - orders.status
+  explanation: Computes total order count across the orders table.
+  usage: 8
+  users:
+  - bob
+  suggested_owner: bob
+  source: query_log
+concept: order_count
+table: orders
+agg: count
+column: '*'
+filters: []
+dimensions:
+- status
+entity: Order
+entity_key: id

@@ -1,0 +1,19 @@
+name: finance_all
+description: Grants finance role access to all certified metrics.
+state: certified
+owner: security-team
+approvers: []
+version: 1
+evidence:
+  queries: []
+  lineage: []
+  explanation: ''
+  usage: 0
+  users: []
+  suggested_owner: null
+  source: ''
+role: finance
+metric: '*'
+effect: allow
+row_filter: null
+deny_dims: []

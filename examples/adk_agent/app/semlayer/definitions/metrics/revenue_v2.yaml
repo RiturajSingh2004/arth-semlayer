@@ -1,0 +1,25 @@
+name: revenue_v2
+description: Unfiltered payment sum superseded by certified revenue.
+state: deprecated
+owner: null
+approvers: []
+version: 0
+evidence:
+  queries:
+  - SELECT SUM(amount) AS revenue FROM payments
+  lineage:
+  - payments.amount
+  explanation: Deprecated unfiltered sum across all payment transactions.
+  usage: 2
+  users:
+  - bob
+  suggested_owner: bob
+  source: query_log
+concept: revenue
+table: payments
+agg: sum
+column: amount
+filters: []
+dimensions: []
+entity: null
+entity_key: null

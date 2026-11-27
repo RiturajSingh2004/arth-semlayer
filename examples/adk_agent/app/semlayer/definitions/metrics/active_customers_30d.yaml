@@ -1,0 +1,27 @@
+name: active_customers_30d
+description: Count of unique customers who placed at least one order within the last 30 days.
+state: certified
+owner: alice
+approvers: []
+version: 1
+evidence:
+  queries:
+  - SELECT COUNT(DISTINCT customer_id) AS active_customers FROM orders WHERE order_date >= current_date - 30
+  lineage:
+  - orders.customer_id
+  - orders.order_date
+  explanation: Computes distinct customers ordering in the trailing 30 days.
+  usage: 4
+  users:
+  - alice
+  suggested_owner: alice
+  source: query_log
+concept: active_customers_30d
+table: orders
+agg: count_distinct
+column: customer_id
+filters:
+- order_date >= CURRENT_DATE - 30
+dimensions: []
+entity: null
+entity_key: null

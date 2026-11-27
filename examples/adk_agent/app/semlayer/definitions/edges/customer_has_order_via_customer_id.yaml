@@ -1,0 +1,21 @@
+name: customer_has_order_via_customer_id
+description: Customer to Order foreign-key edge.
+state: certified
+owner: data-team
+approvers: []
+version: 1
+evidence:
+  queries: []
+  lineage:
+  - customers.id
+  - orders.customer_id
+  explanation: orders.customer_id references customers.id
+  usage: 0
+  users: []
+  suggested_owner: null
+  source: schema
+src: Customer
+rel: HAS_ORDER
+dst: Order
+src_key: id
+dst_key: customer_id

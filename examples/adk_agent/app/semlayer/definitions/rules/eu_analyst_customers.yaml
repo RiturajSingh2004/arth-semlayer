@@ -1,0 +1,19 @@
+name: eu_analyst_customers
+description: Restricts eu_analyst customer_count queries to EU rows only.
+state: certified
+owner: security-team
+approvers: []
+version: 1
+evidence:
+  queries: []
+  lineage: []
+  explanation: ''
+  usage: 0
+  users: []
+  suggested_owner: null
+  source: ''
+role: eu_analyst
+metric: customer_count
+effect: allow
+row_filter: region = 'EU'
+deny_dims: []

@@ -1,0 +1,20 @@
+name: eu_analyst_restrict_sensitive
+description: Blocks sensitive PII columns from being used as dimensions by eu_analyst.
+state: certified
+owner: security-team
+approvers: []
+version: 1
+evidence:
+  queries: []
+  lineage: []
+  explanation: ''
+  usage: 0
+  users: []
+  suggested_owner: null
+  source: ''
+role: eu_analyst
+metric: '*'
+effect: deny
+row_filter: null
+deny_dims:
+- email

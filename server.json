@@ -1,0 +1,27 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.RiturajSingh2004/arth-semlayer",
+  "title": "ARTH: Semantic Layer",
+  "description": "Certification-gated semantic layer MCP server for BigQuery and DuckDB with default-deny RBAC.",
+  "repository": {
+    "url": "https://github.com/RiturajSingh2004/arth-semlayer",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "arth-semlayer",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "serve"
+        }
+      ]
+    }
+  ]
+}
