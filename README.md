@@ -61,6 +61,18 @@ SEMLAYER_BQ_PROJECT=YOUR_PROJECT_ID uv run python scripts/mcp_check.py --warehou
 ```
 Or set `warehouse: bigquery` (and optional `bq_service_account` for read-only service-account impersonation) in `semlayer.yaml`.
 
+### Cloud-Native GCP Operations (Zero Extra Dependencies)
+- **Ingest BigQuery Job History & Dataplex Policy Tags:** Pull historical `SELECT` queries from `INFORMATION_SCHEMA.JOBS_BY_PROJECT` and auto-draft `deny_dims` rules from Dataplex policy tags (`INFORMATION_SCHEMA.COLUMN_FIELD_PATHS`):
+  ```bash
+  SEMLAYER_WAREHOUSE=bigquery SEMLAYER_BQ_PROJECT=YOUR_PROJECT_ID uv run semlayer ingest --from-bq-jobs --bq-days 30
+  uv run semlayer draft --roles finance,eu_analyst
+  ```
+- **BigQuery Materialized View Advisor:** Generate ready-to-review BigQuery MV DDL for high-demand certified metrics:
+  ```bash
+  uv run semlayer feedback --recommend-mv --project YOUR_PROJECT_ID --dataset jaffle_shop
+  ```
+- **Cloud Run + Secret Manager + Scheduled Canary + Cloud Logging JSON:** Pass `--log-json` (`SEMLAYER_LOG_JSON=1`) for structured Cloud Logging output and deploy with [`deploy/cloudrun/`](deploy/cloudrun/README.md).
+
 ## Real workflow (humans in the loop)
 ```bash
 uv run python examples/jaffle_shop/seed.py

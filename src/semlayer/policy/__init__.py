@@ -2,7 +2,7 @@
 import re
 from dataclasses import dataclass, field
 
-from semlayer.core import Rule, State
+from semlayer.core import Evidence, Rule, State
 
 SENSITIVE = re.compile(r"email|ssn|phone|salary|password|dob|birth|address|passport|card_?num", re.IGNORECASE)
 
@@ -38,19 +38,46 @@ def unrestricted(rules: list[Rule], role: str) -> bool:
     return any(r.effect == "allow" and r.metric == "*" and r.row_filter is None for r in live)
 
 
-def sensitive_columns(schema: dict[str, dict[str, str]]) -> dict[str, list[str]]:
-    out = {t: [c for c in cols if SENSITIVE.search(c)] for t, cols in schema.items()}
-    return {t: c for t, c in out.items() if c}
+def sensitive_columns(
+    schema: dict[str, dict[str, str]],
+    policy_tags: dict[str, list[str]] | None = None,
+) -> dict[str, list[str]]:
+    tags = policy_tags or {}
+    out: dict[str, list[str]] = {}
+    for t, cols in schema.items():
+        tagged = set(tags.get(t, []))
+        matched = [c for c in cols if SENSITIVE.search(c) or c in tagged]
+        if matched:
+            out[t] = matched
+    return out
 
 
-def suggest_rules(schema: dict, roles: list[str]) -> list[Rule]:
-    """Draft dimension restrictions for sensitive columns. Humans must certify; grants are never drafted."""
-    cols = sorted({c for v in sensitive_columns(schema).values() for c in v})
+def suggest_rules(
+    schema: dict,
+    roles: list[str],
+    policy_tags: dict[str, list[str]] | None = None,
+) -> list[Rule]:
+    """Draft dimension restrictions for sensitive/policy-tagged columns. Grants are never drafted."""
+    sens = sensitive_columns(schema, policy_tags=policy_tags)
+    cols = sorted({c for v in sens.values() for c in v})
     if not cols:
         return []
+    tagged_flat = sorted({f"{t}.{c}" for t, cs in (policy_tags or {}).items() for c in cs if c in schema.get(t, {})})
+    src = "dataplex_policy_tags+schema" if tagged_flat else "schema"
+    expl = (
+        f"Includes Dataplex policy-tagged columns: {', '.join(tagged_flat)}"
+        if tagged_flat
+        else "Matched sensitive column naming heuristics."
+    )
     return [
-        Rule(name=f"{r}_restrict_sensitive", role=r, effect="deny", deny_dims=cols,
-             description="Suggested: sensitive columns are not usable as dimensions.")
+        Rule(
+            name=f"{r}_restrict_sensitive",
+            role=r,
+            effect="deny",
+            deny_dims=cols,
+            description="Suggested: sensitive columns are not usable as dimensions.",
+            evidence=Evidence(source=src, lineage=tagged_flat, explanation=expl),
+        )
         for r in roles
     ]
 

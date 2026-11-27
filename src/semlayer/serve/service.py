@@ -14,7 +14,7 @@ from semlayer.compiler import (
     SimpleCompiler,
     normalise_filters,
 )
-from semlayer.core import Edge, Entity, Metric, Rule
+from semlayer.core import Edge, Entity, Metric, Rule, emit_cloud_log
 from semlayer.graph import Graph, joinable_entities, resolve_join_path
 from semlayer.policy import evaluate, unrestricted
 from semlayer.registry import Registry
@@ -70,6 +70,9 @@ class Service:
         with (self.reg.state_dir / "usage.jsonl").open("a") as f:
             f.write(json.dumps({"ts": time.time(), "event": event, "metric": metric,
                                 "role": role, "note": note, "reason": reason}) + "\n")
+        sev = "ERROR" if event == "error" else ("WARNING" if event in {"refused", "issue"} else "INFO")
+        emit_cloud_log(sev, f"service.{event}: {metric or '-'}", event=f"usage.{event}",
+                       metric=metric, role=role, note=note, reason=reason)
 
     def _resolve_role(self, as_role: str | None) -> str:
         supplied = (as_role or "").strip()

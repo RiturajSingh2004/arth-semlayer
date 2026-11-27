@@ -1,4 +1,4 @@
-from .config import Config, load_dotenv  # noqa: F401
+from .config import Config, emit_cloud_log, load_dotenv  # noqa: F401
 from .llm import LLM, LLMError, NullLLM, OllamaLLM, OpenAICompatLLM, make_llm  # noqa: F401
 from .models import (  # noqa: F401
     KINDS,

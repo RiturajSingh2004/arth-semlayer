@@ -177,3 +177,74 @@ def run_canary(reg: Registry, wh, suspend: bool = True, by: str = "canary") -> d
                     if s.name not in suspended:
                         suspended.append(s.name)
     return {"passed": passed, "failed": failed, "suspended": suspended}
+
+
+def recommend_materialized_views(
+    reg: Registry,
+    events: list[dict],
+    project: str = "YOUR_PROJECT_ID",
+    dataset: str = "jaffle_shop",
+    min_volume: int = 3,
+    refresh_minutes: int = 30,
+) -> list[dict]:
+    """Generate advisory BigQuery Materialized View DDL for high-demand certified metrics (ADR-038)."""
+    from semlayer.compiler import SimpleCompiler
+    from semlayer.core.models import ident
+    from semlayer.warehouse.bigquery import render_sql
+
+    ident(dataset)
+    if not project or any(ch in project for ch in ("`", ";", "\n", "\r", "\x00", " ")):
+        raise ValueError(f"invalid BigQuery project id: {project!r}")
+
+    fb = feedback_summary(events, min_volume=min_volume)
+    comp = SimpleCompiler(dialect="bigquery")
+    recs: list[dict] = []
+
+    for metric_name, count in fb["demand"]:
+        m = reg.get("metric", metric_name)
+        if not isinstance(m, Metric) or m.state is not State.certified:
+            continue
+        if m.metric_type != "simple":
+            recs.append({
+                "metric": m.name,
+                "queries": count,
+                "eligible": False,
+                "reason": f"{m.metric_type} metrics materialize via their underlying simple input metrics",
+                "ddl": None,
+            })
+            continue
+        if m.agg == "count_distinct":
+            recs.append({
+                "metric": m.name,
+                "queries": count,
+                "eligible": False,
+                "reason": "BigQuery incremental MVs do not support exact COUNT(DISTINCT); consider APPROX_COUNT_DISTINCT",
+                "ddl": None,
+            })
+            continue
+
+        group_dims = list(m.dimensions)
+        c = comp.compile(
+            m,
+            dims=group_dims,
+            time_grain="day" if m.time_dimension else None,
+        )
+        # Strip trailing ORDER BY (BigQuery MVs disallow ORDER BY inside the defining SELECT)
+        select_bq = render_sql(c.sql, c.params, project, dataset)
+        parsed = sqlglot.parse_one(select_bq, read="bigquery")
+        parsed.set("order", None)
+        clean_select = parsed.sql(dialect="bigquery")
+        mv_name = f"mv_semlayer_{m.name}"
+        ddl = (
+            f"CREATE MATERIALIZED VIEW IF NOT EXISTS `{project}`.`{dataset}`.`{mv_name}`\n"
+            f"OPTIONS (enable_refresh = true, refresh_interval_minutes = {int(refresh_minutes)})\n"
+            f"AS {clean_select};"
+        )
+        recs.append({
+            "metric": m.name,
+            "queries": count,
+            "eligible": True,
+            "view": f"{project}.{dataset}.{mv_name}",
+            "ddl": ddl,
+        })
+    return recs

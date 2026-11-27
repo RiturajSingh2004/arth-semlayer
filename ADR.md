@@ -160,3 +160,16 @@ Format: Context / Decision / Consequences.
 ## ADR-035: Catalog retrieval via SQLite FTS5 (`search_metrics`) and paginated `list_metrics`
 - Decision: add `synonyms: list[str]` on `Metric`, index certified metrics in a SQLite FTS5 virtual table (`metrics_fts`) inside `Registry`, expose `search_metrics(query, k)` ranked by BM25 with punctuation-safe prefix tokenisation, and add optional `limit`/`offset` pagination to `list_metrics`. Zero embedding or external vector dependencies required.
 - Consequences: fast offline metric discovery for large catalogs without bloating agent context windows.
+
+## ADR-036: BigQuery `INFORMATION_SCHEMA.JOBS` ingestion and Dataplex Policy Tag `deny_dims`
+- Context: on GCP, BigQuery already logs historical `SELECT` queries in `INFORMATION_SCHEMA.JOBS_BY_PROJECT` and tags sensitive columns via Dataplex / Data Catalog policy tags in `INFORMATION_SCHEMA.COLUMN_FIELD_PATHS`.
+- Decision: extend `BigQueryMCP` (still invoking **only** `execute_sql_readonly`) with `recent_queries(limit, days)` over `` `{project}`.`{location}`.INFORMATION_SCHEMA.JOBS_BY_PROJECT `` (stripping email domains from `user_email` for privacy and normalising qualified dataset table names for `draft_metrics`) and `policy_tagged_columns()` over `` `{project}`.`{dataset}`.INFORMATION_SCHEMA.COLUMN_FIELD_PATHS ``. `semlayer ingest --from-bq-jobs` ingests BigQuery job history without a local JSONL file, and `suggest_rules` merges Dataplex policy-tagged columns with `policy.SENSITIVE` into drafted `deny_dims` rules.
+- Consequences: zero-export onboarding and automatic PII column restriction drafting on BigQuery with zero extra dependencies.
+
+## ADR-037: Cloud Run deployment, Secret Manager, Cloud Scheduler canary, and Cloud Logging JSON
+- Decision: add `log_json` (`--log-json` / `SEMLAYER_LOG_JSON=1`) emitting single-line Google Cloud Logging structured JSON (`severity`, `message`, `component`, `event`) to `sys.stderr` (never `sys.stdout`, preserving stdio MCP JSON-RPC framing and CLI JSON outputs). Ship a non-root root `Dockerfile` and `deploy/cloudrun/` recipes for Cloud Run IAM-protected Governance Console (`--no-allow-unauthenticated`), Secret Manager `GEMINI_API_KEY` injection, and scheduled Cloud Run Job `semlayer canary`.
+- Consequences: stateless Cloud Run services emit structured audit/refusal/suspension telemetry directly into Cloud Logging & Cloud Monitoring with zero extra Python packages.
+
+## ADR-038: BigQuery Materialized View DDL advisor (`semlayer feedback --recommend-mv`)
+- Decision: inspect high-demand certified `simple` metrics from `feedback_summary` and generate human-reviewable BigQuery `CREATE MATERIALIZED VIEW IF NOT EXISTS` DDL (flagging `count_distinct` metrics that BigQuery incremental MVs restrict). Never execute DDL automatically.
+- Consequences: operators get copy-paste BigQuery cost/latency optimisations for hot certified metrics while keeping the runtime strictly read-only.

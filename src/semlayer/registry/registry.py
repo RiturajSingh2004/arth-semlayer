@@ -12,7 +12,7 @@ from pathlib import Path
 
 import yaml
 
-from semlayer.core import KINDS, InvalidTransition, Metric, Node, State, transition
+from semlayer.core import KINDS, InvalidTransition, Metric, Node, State, emit_cloud_log, transition
 
 DIRS = {"metric": "metrics", "entity": "entities", "edge": "edges", "rule": "rules"}
 
@@ -292,6 +292,9 @@ class Registry:
         rec = {"ts": time.time(), "action": action, "kind": kind, "name": name, "by": by, **extra}
         with (self.state_dir / "audit.jsonl").open("a") as f:
             f.write(json.dumps(rec) + "\n")
+        sev = "WARNING" if action in {"suspend", "deprecate", "reject"} else "INFO"
+        emit_cloud_log(sev, f"registry.{action}: {kind}/{name}", event=f"audit.{action}",
+                       kind=kind, name=name, by=by, **extra)
         if self.commit:
             self._git(f"{action} {kind} {name}")
 

@@ -19,8 +19,8 @@ agent ──MCP (stdio)──► semlayer (local: certified metrics, graph, poli
 | Module | Responsibility |
 |---|---|
 | core | models, state machine, config + `.env` loader, LLM interface (`gemini`, `ollama`, `openai`, `none`) with pacing & 429 `Retry-After` backoff |
-| warehouse | `Warehouse` protocol, `DuckDBWarehouse` (bound params), `BigQueryMCP` (Streamable HTTP client calling only `execute_sql_readonly`, `sqlglot` AST literal/dialect rendering, dry-run byte cap) |
-| ingest | schema snapshot via `Warehouse.schema()`, query log (JSONL/SQL), dbt manifest docs |
+| warehouse | `Warehouse` protocol, `DuckDBWarehouse` (bound params), `BigQueryMCP` (Streamable HTTP client calling only `execute_sql_readonly`, `sqlglot` AST literal/dialect rendering, dry-run byte cap, `INFORMATION_SCHEMA.JOBS` & Dataplex policy-tag readers) |
+| ingest | schema snapshot, local or BigQuery `INFORMATION_SCHEMA.JOBS` query log, Dataplex policy-tag snapshot, dbt manifest docs |
 | lineage | sqlglot column-level lineage |
 | draft | single-table aggregate queries → metric drafts; evidence; owner suggestion; optional LLM wording (includes filters) |
 | conflicts | variants (same concept, different logic) and duplicates (same logic, different names); split / pick |

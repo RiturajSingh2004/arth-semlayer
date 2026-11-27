@@ -95,11 +95,12 @@ def make_warehouse(cfg, read_only: bool = True) -> Warehouse:
                 "SEMLAYER_BQ_PROJECT, or GOOGLE_CLOUD_PROJECT"
             )
         dataset = os.environ.get("SEMLAYER_BQ_DATASET") or cfg.bq_dataset
+        location = os.environ.get("SEMLAYER_BQ_LOCATION") or getattr(cfg, "bq_location", "region-us")
         mcp_url = os.environ.get("SEMLAYER_BQ_MCP_URL") or cfg.bq_mcp_url
         sa = os.environ.get("SEMLAYER_BQ_SERVICE_ACCOUNT") or cfg.bq_service_account
         max_bytes = int(os.environ.get("SEMLAYER_BQ_MAX_BYTES", cfg.bq_max_bytes))
         return BigQueryMCP(
-            project=project, dataset=dataset, mcp_url=mcp_url,
+            project=project, dataset=dataset, location=location, mcp_url=mcp_url,
             service_account=sa, max_bytes=max_bytes,
         )
     raise ValueError(f"unknown warehouse: {kind!r} (use duckdb or bigquery)")

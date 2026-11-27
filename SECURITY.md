@@ -18,10 +18,12 @@
 | Role spoofing via prompt injection | `semlayer serve --role <role>` (`bound_role` / `SEMLAYER_BOUND_ROLE`) binds caller identity at server start and rejects any caller-supplied `as_role` (`ADR-031`) |
 | Indirect RBAC bypass via ratios/joins | `ratio`/`derived` metrics enforce RBAC + `row_filter` + `deny_dims` on every input metric (`ADR-033`); `<Entity>.<dim>` joins require safe `many_to_one` cardinality and unrestricted access on the joined entity (`ADR-034`) |
 | Resource exhaustion / broken columns | configurable `max_rows`, `max_groups`, and `max_filter_list` caps; `semlayer canary` probes certified metrics with `LIMIT 0` and suspends broken definitions (`State.suspended`, never served) (`ADR-031`) |
+| Unauthenticated Governance UI / key sprawl | `deploy/cloudrun/` deploys `--web` on Cloud Run with `--no-allow-unauthenticated` (Cloud Run IAM / IAP), injects `GEMINI_API_KEY` from GCP Secret Manager, and emits structured audit/refusal JSON to Cloud Logging (`ADR-037`) |
+| Unmarked PII columns in BigQuery | `ingest` inspects Dataplex / Data Catalog policy tags (`INFORMATION_SCHEMA.COLUMN_FIELD_PATHS`) and merges tagged columns into drafted `deny_dims` rules (`ADR-036`) |
 | Probing columns through graph filters | graph filters limited to columns that certified metrics expose as dimensions, minus the role's denied dimensions |
 
 ## Known gaps
 - When `bound_role` is unset (multi-role local/eval mode), roles are asserted by the caller (`as_role`); start MCP servers with `semlayer serve --role <role>` in untrusted agent environments.
-- The review UI has no login; run it locally or behind your own auth.
+- Locally (`127.0.0.1`), the review UI has no built-in login; deploy behind Cloud Run IAM / IAP (`deploy/cloudrun/`) or a reverse-proxy auth layer when shared.
 - Metric `filters` are trusted SQL authored by certified definitions (reviewers must read them).
 - Query-log text is untrusted: it is parsed, never executed, and shown to reviewers as evidence.
