@@ -104,3 +104,33 @@ Format: Context / Decision / Consequences.
 - Context: `demo` previously called `shutil.rmtree` on the entire registry root, silently destroying any real definitions a user had certified there, and also removing `.gitkeep` (causing a spurious git diff). The wipe also happened *after* the demo database was rebuilt, so the database could be replaced even if the wipe later failed.
 - Decision: `demo` now calls `_reset_registry(root, force)` as its **first** action (before touching the database). The function refuses with a clear `SystemExit` if the registry contains YAML definitions that demo did not create (detected by the absence of `definitions/_state/demo.marker`). The guard can be overridden with `--force`. The wipe removes only the known subdirectories (`metrics/`, `entities/`, `edges/`, `rules/`, `_pending/`, `_state/`) and leaves `.gitkeep` and any other files in place. The marker is re-created after each successful run so that subsequent `demo` runs pass the check automatically.
 - Consequences: running `demo` twice in a row is safe and idempotent; a user who has certified real definitions will get a clear error rather than silent data loss; `--force` is available when you genuinely want to wipe and restart; `.gitkeep` is preserved so git stays clean.
+
+## ADR-024: Gemini API is the default LLM; Ollama stays as an option (proposed; amends ADR-009 and ADR-022)
+- Context: local inference needs a large model download and suitable hardware. The Gemini API (AI Studio key) lists free-of-charge models and has an OpenAI-compatible endpoint.
+- Decision: default to `llm_provider: gemini`, `llm_model: gemini-3.5-flash-lite`, key from `GEMINI_API_KEY`. Reuse `OpenAICompatLLM`; add no SDK. Keep `ollama`, `openai` and `none`. The LLM still only words descriptions and runs eval arms.
+- Consequences: setup needs a key and network access; catalog text, filters and dimension values leave the machine, and the unpaid tier uses them to improve Google products and allows human review, so only demo data may be sent. Without a key, drafting falls back to heuristics and LLM eval stops with a message. Recorded Qwen results do not carry over, and identical outputs across runs are not assumed (revisits ADR-018).
+
+## ADR-025: No billing account (proposed; amends ADR-009)
+- Context: free allowances on a billing-enabled project can be exceeded and charged; budget alerts do not stop spending.
+- Decision: link no billing account to any project. Use only the BigQuery sandbox and the Gemini API free tier. A new service must work without billing to be added.
+- Consequences: exceeding a limit fails the request instead of costing money. No Cloud Run, so semlayer and its MCP server run locally over stdio and the usage log stays a local file. Sandbox tables expire after 60 days, DML and streaming are unavailable, and storage is capped at 10 GiB over the sandbox's lifetime.
+
+## ADR-026: BigQuery through Google's managed MCP server (proposed; extends ADR-004)
+- Context: the goal is to integrate GCP through MCP. Alternatives: the native BigQuery client (query parameters, byte cap, no MCP on the warehouse side) and self-hosted MCP Toolbox (fixed tool templates fit dynamically compiled SQL poorly).
+- Decision: semlayer is an MCP client of `https://bigquery.googleapis.com/mcp` and calls only `execute_sql_readonly`. Agents connect to semlayer only, never to the BigQuery MCP server. Authenticate as a dedicated read-only service account. DuckDB remains the default; BigQuery is selected in config. `google-auth` goes in an optional `gcp` group.
+- Consequences: certification and policy still apply to every query. Anyone holding their own BigQuery credentials can bypass semlayer, so agents must not be given any. Depends on the server's tool schema and limits (see ADR-027 and ADR-028).
+
+## ADR-027: Rendered literals on BigQuery MCP (proposed; exception to the bound-parameter control)
+- Context: the `execute_sql_readonly` input schema has no query parameters.
+- Decision: the BigQuery warehouse replaces placeholders on the parsed syntax tree with sqlglot literal nodes. Allowed values: string, integer, finite float, boolean, null, date, and flat lists of these. Anything else is refused. No string formatting of values. DuckDB keeps bound parameters.
+- Consequences: injection safety on BigQuery depends on sqlglot's escaping, which is weaker than binding; it needs hostile-input tests, a pinned version in `uv.lock`, and the read-only IAM role. If the tests cannot be made to pass, switch queries to the native client in a new ADR.
+
+## ADR-028: Query safeguards on BigQuery MCP (proposed)
+- Context: the tool has no maximum-bytes-billed input, results are capped at 3,000 rows (graph traversal allows 10,000 keys), and a query can return before the job completes.
+- Decision: dry run first and refuse above a configured byte limit. Refuse if the job is incomplete, reports errors, or the result is truncated; page instead only if the server's tools support it.
+- Consequences: two calls per query; large traversals are refused rather than answered partially.
+
+## ADR-029: Free-tier rate limits and eval integrity (proposed; amends ADR-020)
+- Context: the client retries only 5xx and connection errors, so HTTP 429 raises at once. Drafting then disables the LLM for the rest of the run, and eval scores the error as a pass on should-refuse questions.
+- Decision: pace requests, back off on 429, and stop an eval run on any LLM transport or quota error. A stopped run reports no score.
+- Consequences: slower runs; an exhausted daily quota means running again after it resets.
