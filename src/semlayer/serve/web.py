@@ -47,12 +47,25 @@ a { color: inherit; text-decoration: none; }
 code, pre, .mono { font-family: var(--mono); font-size: 12.5px; }
 pre { margin: 6px 0 0; padding: 10px 12px; background: #090808; border: 1px solid var(--border); border-radius: 6px; overflow-x: auto; color: #e7e5e4; line-height: 1.45; }
 
-/* Topbar */
+/* Topbar & Rolling Brand */
 .topbar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 28px; height: 60px; background: rgba(13, 12, 11, 0.92); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
-.brand-wrap { display: flex; align-items: center; gap: 28px; height: 100%; }
-.brand { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); display: flex; align-items: center; gap: 10px; }
-.brand-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
-.top-tab { display: inline-flex; align-items: center; height: 100%; font-size: 13px; font-weight: 600; color: var(--text-primary); border-bottom: 2px solid var(--accent); padding: 0 2px; }
+.brand-wrap { display: flex; align-items: center; gap: 26px; height: 100%; }
+.brand { font-size: 17.5px; font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.brand-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); margin-right: 4px; flex-shrink: 0; }
+.brand-roller { display: inline-block; height: 26px; line-height: 26px; overflow: hidden; vertical-align: bottom; transition: width 0.52s cubic-bezier(0.22, 1, 0.36, 1); }
+.brand-reel { display: flex; flex-direction: column; will-change: transform; animation: brandRollFallback 7.2s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+.brand-reel.js-driven { animation: none; }
+.reel-word { display: block; height: 26px; line-height: 26px; white-space: nowrap; }
+.reel-dhi { color: var(--accent-bright); }
+@keyframes brandRollFallback {
+  0%, 38% { transform: translateY(0); }
+  48%, 86% { transform: translateY(-26px); }
+  96%, 100% { transform: translateY(-52px); }
+}
+.top-tabs { display: inline-flex; align-items: center; gap: 22px; height: 100%; }
+.top-tab { display: inline-flex; align-items: center; gap: 7px; height: 100%; font-size: 13px; font-weight: 600; color: var(--text-secondary); border-bottom: 2px solid transparent; padding: 0 2px; cursor: pointer; transition: color 0.15s, border-color 0.15s; }
+.top-tab:hover { color: var(--text-primary); }
+.top-tab.active { color: var(--text-primary); border-bottom-color: var(--accent); }
 .top-meta { display: flex; align-items: center; gap: 12px; }
 .search-pill { display: flex; align-items: center; gap: 10px; background: var(--bg-elevated); border: 1px solid var(--border-strong); border-radius: 999px; padding: 7px 14px; width: 340px; max-width: 42vw; transition: border-color 0.15s; }
 .search-pill:focus-within { border-color: var(--accent); }
@@ -138,6 +151,32 @@ button:hover { background: var(--bg-hover); border-color: #423b37; }
 .form-row { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; color: var(--text-secondary); }
 .empty-note { color: var(--text-muted); font-style: italic; padding: 6px 0; }
 
+/* System Architecture Canvas */
+.tab-view.hidden { display: none; }
+.arch-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.arch-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.arch-pill { font-size: 12px; padding: 5px 12px; border-radius: 999px; background: var(--bg-surface); border: 1px solid var(--border-strong); color: var(--text-secondary); cursor: pointer; font-weight: 600; transition: all 0.15s; }
+.arch-pill:hover { color: var(--text-primary); border-color: #4a423d; }
+.arch-pill.active { background: var(--bg-accent-dim); color: var(--accent-bright); border-color: rgba(232, 101, 43, 0.45); }
+.arch-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11.5px; color: var(--text-secondary); font-family: var(--mono); }
+.leg-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+.arch-stage { background: radial-gradient(circle at 50% 42%, rgba(232, 101, 43, 0.06), transparent 55%), #0a0908; border: 1px solid var(--border-strong); border-radius: 12px; padding: 14px; overflow-x: auto; box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); }
+.arch-svg { width: 100%; min-width: 960px; height: auto; display: block; }
+.arch-flow { fill: none; stroke-width: 1.75; stroke-dasharray: 6 6; animation: archDash 18s linear infinite; }
+.arch-flow-fast { fill: none; stroke-width: 2; stroke-dasharray: 7 5; animation: archDash 10s linear infinite; }
+@keyframes archDash { to { stroke-dashoffset: -240; } }
+.arch-pulse-ring { transform-box: fill-box; transform-origin: center; animation: gatePulse 2.8s ease-in-out infinite; }
+@keyframes gatePulse {
+  0%, 100% { opacity: 0.32; transform: scale(1); }
+  50% { opacity: 0.75; transform: scale(1.03); }
+}
+.arch-node { cursor: pointer; transition: opacity 0.25s, filter 0.2s; }
+.arch-node:hover { filter: brightness(1.16); }
+.arch-dimmed { opacity: 0.18 !important; transition: opacity 0.25s; }
+.arch-inspector { margin-top: 12px; background: var(--bg-surface); border: 1px solid var(--border-strong); border-left: 3px solid var(--accent); border-radius: 8px; padding: 12px 16px; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 10px; }
+.arch-ins-title { font-weight: 700; color: var(--text-primary); font-size: 13.5px; }
+.arch-ins-detail { color: var(--text-secondary); font-size: 12.5px; flex: 1; min-width: 260px; }
+
 @media (max-width: 960px) {
   .shell { grid-template-columns: 1fr; }
   .sidebar { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
@@ -147,6 +186,60 @@ button:hover { background: var(--bg-hover); border-color: #423b37; }
 
 SCRIPT = """<script>
 document.addEventListener("DOMContentLoaded", () => {
+  /* 1. Upward rolling wordmark: Semantic -> Dhī -> Semantic */
+  const roller = document.getElementById("brand-roller");
+  const reel = document.getElementById("brand-reel");
+  if (roller && reel) {
+    const words = reel.querySelectorAll(".reel-word");
+    if (words.length >= 3) {
+      reel.classList.add("js-driven");
+      const widths = Array.from(words).map((w) => Math.ceil(w.getBoundingClientRect().width) + 2);
+      roller.style.width = widths[0] + "px";
+      let idx = 0;
+      setInterval(() => {
+        idx += 1;
+        reel.style.transition = "transform 0.55s cubic-bezier(0.22, 1, 0.36, 1)";
+        reel.style.transform = `translateY(-${idx * 26}px)`;
+        roller.style.width = widths[idx] + "px";
+        if (idx === 2) {
+          setTimeout(() => {
+            reel.style.transition = "none";
+            reel.style.transform = "translateY(0)";
+            idx = 0;
+          }, 580);
+        }
+      }, 3200);
+    }
+  }
+
+  /* 2. Top-level tab switcher (Governance Console <-> System) */
+  const tabLinks = document.querySelectorAll("[data-tab-btn]");
+  const views = {
+    governance: document.getElementById("view-governance"),
+    system: document.getElementById("view-system"),
+  };
+  function activateTab(name, pushHash) {
+    if (!views[name]) return;
+    Object.entries(views).forEach(([k, el]) => {
+      if (el) el.classList.toggle("hidden", k !== name);
+    });
+    tabLinks.forEach((btn) => btn.classList.toggle("active", btn.dataset.tabBtn === name));
+    if (pushHash) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", name);
+      window.history.replaceState({}, "", url);
+    }
+  }
+  tabLinks.forEach((btn) => {
+    btn.addEventListener("click", (ev) => {
+      if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+      ev.preventDefault();
+      activateTab(btn.dataset.tabBtn, true);
+    });
+  });
+  if (window.location.hash === "#system") activateTab("system", false);
+
+  /* 3. Ctrl+K global filter */
   const input = document.getElementById("global-search");
   document.addEventListener("keydown", (ev) => {
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "k") {
@@ -162,12 +255,44 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     });
   }
-  const links = document.querySelectorAll(".nav-link");
-  links.forEach((lnk) => {
-    lnk.addEventListener("click", () => {
-      links.forEach((x) => x.classList.remove("active"));
-      lnk.classList.add("active");
+
+  /* 4. Sidebar active pill highlight */
+  document.querySelectorAll(".sidebar").forEach((sb) => {
+    const links = sb.querySelectorAll(".nav-link");
+    links.forEach((lnk) => {
+      lnk.addEventListener("click", () => {
+        links.forEach((x) => x.classList.remove("active"));
+        lnk.classList.add("active");
+      });
     });
+  });
+
+  /* 5. Interactive System Architecture stack filter & node inspector */
+  const pills = document.querySelectorAll("[data-arch-filter]");
+  const archItems = document.querySelectorAll("[data-stack]");
+  pills.forEach((pill) => {
+    pill.addEventListener("click", () => {
+      const mode = pill.dataset.archFilter;
+      pills.forEach((p) => p.classList.toggle("active", p === pill));
+      archItems.forEach((el) => {
+        const stacks = (el.dataset.stack || "").split(" ");
+        const show = mode === "all" || stacks.includes("core") || stacks.includes(mode);
+        el.classList.toggle("arch-dimmed", !show);
+      });
+    });
+  });
+
+  const insTitle = document.getElementById("arch-ins-title");
+  const insDetail = document.getElementById("arch-ins-detail");
+  const insAdr = document.getElementById("arch-ins-adr");
+  document.querySelectorAll(".arch-node[data-title]").forEach((node) => {
+    const update = () => {
+      if (insTitle) insTitle.textContent = node.dataset.title || "";
+      if (insDetail) insDetail.textContent = node.dataset.detail || "";
+      if (insAdr) insAdr.textContent = node.dataset.adr || "";
+    };
+    node.addEventListener("mouseenter", update);
+    node.addEventListener("click", update);
   });
 });
 </script>"""
@@ -316,6 +441,238 @@ def _render_query_result(res: dict | None, err: str = "") -> str:
     )
 
 
+def _system_view(wh_dialect: str, bq_proj: str, bq_ds: str, cert_count: int,
+                 rule_count: int, edge_count: int, hidden: bool) -> str:
+    cls = "shell tab-view hidden" if hidden else "shell tab-view"
+    active_mode = f"BigQuery MCP ({bq_proj}.{bq_ds})" if wh_dialect == "bigquery" else "DuckDB Local Read-Only"
+    return (
+        f"<div id='view-system' class='{cls}'>"
+        f"<aside class='sidebar'>"
+        f"<div class='nav-group'><div class='nav-title'>System Architecture</div>"
+        f"<a class='nav-link active' href='#sys-diagram'><span>Animated topology</span><span class='nav-count'>Dual</span></a>"
+        f"<a class='nav-link' href='#sys-planes'><span>Execution planes</span><span class='nav-count'>4</span></a>"
+        f"<a class='nav-link' href='#sys-matrix'><span>GCP vs Local matrix</span></a>"
+        f"<a class='nav-link' href='#sys-invariants'><span>Security invariants</span><span class='nav-count'>8</span></a></div>"
+        f"<div class='nav-group'><div class='nav-title'>Active Runtime</div>"
+        f"<div style='padding:6px 11px;font-size:12px;color:var(--text-secondary)'>"
+        f"<div>Warehouse: <code style='color:var(--accent-bright)'>{e(wh_dialect)}</code></div>"
+        f"<div style='margin-top:4px'>Certified metrics: <code>{cert_count}</code></div>"
+        f"<div style='margin-top:4px'>FK graph edges: <code>{edge_count}</code></div>"
+        f"<div style='margin-top:4px'>Policy rules: <code>{rule_count}</code></div>"
+        f"</div></div></aside>"
+        f"<main class='content'>"
+        f"<div class='eyebrow'>System Topology · GCP Cloud + Local Dual Stack</div>"
+        f"<h1>ARTH: Semantic / Dhī Layer Architecture</h1>"
+        f"<p class='lead'>Agents never touch raw tables or warehouse credentials. Every request passes through "
+        f"human-certified YAML definitions, default-deny RBAC &amp; entity-graph gates, and <code>sqlglot</code> AST "
+        f"compilation before executing read-only on Google's managed BigQuery MCP server or local DuckDB.</p>"
+        f"<section id='sys-diagram'>"
+        f"<div class='arch-toolbar'>"
+        f"<div class='arch-pills'>"
+        f"<button type='button' class='arch-pill active' data-arch-filter='all'>Dual Stack (GCP + Local)</button>"
+        f"<button type='button' class='arch-pill' data-arch-filter='gcp'>GCP Cloud Path (Gemini + BigQuery MCP)</button>"
+        f"<button type='button' class='arch-pill' data-arch-filter='local'>Local / Offline Path (Ollama + DuckDB)</button>"
+        f"<button type='button' class='arch-pill' data-arch-filter='loop'>Governance &amp; Drift Loop</button>"
+        f"</div>"
+        f"<div class='arch-legend'>"
+        f"<span><i class='leg-dot' style='background:#e8652b'></i>Core Governance</span>"
+        f"<span><i class='leg-dot' style='background:#38bdf8'></i>GCP Cloud (AI Studio / BQ MCP)</span>"
+        f"<span><i class='leg-dot' style='background:#34d399'></i>Local Engine (Ollama / DuckDB)</span>"
+        f"<span><i class='leg-dot' style='background:#fbbf24'></i>Drift &amp; Feedback</span>"
+        f"</div></div>"
+        f"<div class='arch-stage'>"
+        f"<svg class='arch-svg' viewBox='0 0 1120 610' xmlns='http://www.w3.org/2000/svg' role='img' aria-label='ARTH Semantic Layer Architecture'>"
+        f"<defs>"
+        f"<pattern id='arch-grid' width='24' height='24' patternUnits='userSpaceOnUse'>"
+        f"<circle cx='2' cy='2' r='1' fill='#24201d'/></pattern>"
+        f"<marker id='arr-orange' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>"
+        f"<path d='M 0 1 L 10 5 L 0 9 z' fill='#e8652b'/></marker>"
+        f"<marker id='arr-gcp' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>"
+        f"<path d='M 0 1 L 10 5 L 0 9 z' fill='#38bdf8'/></marker>"
+        f"<marker id='arr-local' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>"
+        f"<path d='M 0 1 L 10 5 L 0 9 z' fill='#34d399'/></marker>"
+        f"<marker id='arr-warn' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>"
+        f"<path d='M 0 1 L 10 5 L 0 9 z' fill='#fbbf24'/></marker>"
+        f"</defs>"
+        f"<rect width='1120' height='610' rx='8' fill='url(#arch-grid)'/>"
+
+        # Plane boundary containers
+        f"<rect x='16' y='16' width='318' height='510' rx='10' fill='#110f0e' fill-opacity='0.65' stroke='#262220' stroke-dasharray='4 4'/>"
+        f"<text x='30' y='38' fill='#736c67' font-size='11' font-weight='700' font-family='monospace'>PLANE 1 · INGEST, DRAFT &amp; LLM WORDING</text>"
+
+        f"<rect x='354' y='16' width='372' height='510' rx='10' fill='#141110' fill-opacity='0.8' stroke='#3a241b'/>"
+        f"<text x='368' y='38' fill='#f2743d' font-size='11' font-weight='700' font-family='monospace'>PLANE 2 · SEMLAYER CERTIFIED BOUNDARY (LOCAL)</text>"
+
+        f"<g data-stack='gcp'>"
+        f"<rect x='746' y='16' width='358' height='278' rx='10' fill='#0c141c' fill-opacity='0.72' stroke='#1e3a52' stroke-dasharray='5 4'/>"
+        f"<text x='760' y='38' fill='#38bdf8' font-size='11' font-weight='700' font-family='monospace'>PLANE 3A · GOOGLE CLOUD (BIGQUERY OVER MCP)</text></g>"
+
+        f"<g data-stack='local'>"
+        f"<rect x='746' y='310' width='358' height='216' rx='10' fill='#0c1612' fill-opacity='0.72' stroke='#1a3d2f' stroke-dasharray='5 4'/>"
+        f"<text x='760' y='332' fill='#34d399' font-size='11' font-weight='700' font-family='monospace'>PLANE 3B · LOCAL WAREHOUSE (DEFAULT / CI)</text></g>"
+
+        # Animated connector paths
+        # Ingest -> Draft -> Gate -> Registry -> Service
+        f"<path id='p-ingest' data-stack='core loop' class='arch-flow' d='M 175 112 L 175 148' stroke='#e8652b' marker-end='url(#arr-orange)'/>"
+        f"<path id='p-draft-gate' data-stack='core loop' class='arch-flow-fast' d='M 316 190 L 372 115' stroke='#e8652b' marker-end='url(#arr-orange)'/>"
+        f"<path id='p-gemini-draft' data-stack='gcp' class='arch-flow-fast' d='M 175 300 L 175 234' stroke='#38bdf8' marker-end='url(#arr-gcp)'/>"
+        f"<path id='p-ollama-draft' data-stack='local' class='arch-flow' d='M 175 416 L 175 380' stroke='#34d399' stroke-dasharray='4 5'/>"
+        f"<path id='p-ollama-up' data-stack='local' class='arch-flow' d='M 316 452 C 342 452, 340 212, 316 202' stroke='#34d399' marker-end='url(#arr-local)'/>"
+        f"<path id='p-gate-reg' data-stack='core loop' class='arch-flow-fast' d='M 540 150 L 540 184' stroke='#e8652b' marker-end='url(#arr-orange)'/>"
+        f"<path id='p-reg-svc' data-stack='core' class='arch-flow-fast' d='M 540 264 L 540 302' stroke='#e8652b' marker-end='url(#arr-orange)'/>"
+        f"<path id='p-agent-mcp' data-stack='core gcp local' class='arch-flow-fast' d='M 540 434 L 540 392' stroke='#f2743d' marker-end='url(#arr-orange)'/>"
+        # Compiler -> GCP BigQuery MCP -> BigQuery Tables
+        f"<path id='p-svc-bq' data-stack='gcp' class='arch-flow-fast' d='M 706 346 C 742 346, 730 108, 764 108' stroke='#38bdf8' marker-end='url(#arr-gcp)'/>"
+        f"<path id='p-bq-ro' data-stack='gcp' class='arch-flow-fast' d='M 925 144 L 925 182' stroke='#38bdf8' marker-end='url(#arr-gcp)'/>"
+        # Compiler -> DuckDB
+        f"<path id='p-svc-duck' data-stack='local' class='arch-flow-fast' d='M 706 362 C 736 362, 736 418, 764 418' stroke='#34d399' marker-end='url(#arr-local)'/>"
+        # Drift & Feedback return loop along bottom
+        f"<path id='p-feedback' data-stack='loop' class='arch-flow' d='M 640 392 C 640 566, 460 566, 390 566 L 230 566 C 80 566, 42 548, 42 505 C 42 72, 340 72, 372 92' stroke='#fbbf24' marker-end='url(#arr-warn)'/>"
+
+        # Glowing animated data packets along key paths
+        f"<circle r='3.5' fill='#f2743d' data-stack='core'><animateMotion dur='2.4s' repeatCount='indefinite'><mpath href='#p-agent-mcp'/></animateMotion></circle>"
+        f"<circle r='3.5' fill='#e8652b' data-stack='core loop'><animateMotion dur='2.8s' repeatCount='indefinite'><mpath href='#p-draft-gate'/></animateMotion></circle>"
+        f"<circle r='3.5' fill='#38bdf8' data-stack='gcp'><animateMotion dur='2.6s' repeatCount='indefinite'><mpath href='#p-gemini-draft'/></animateMotion></circle>"
+        f"<circle r='4' fill='#38bdf8' data-stack='gcp'><animateMotion dur='3.0s' repeatCount='indefinite'><mpath href='#p-svc-bq'/></animateMotion></circle>"
+        f"<circle r='3.5' fill='#38bdf8' data-stack='gcp'><animateMotion dur='1.9s' repeatCount='indefinite'><mpath href='#p-bq-ro'/></animateMotion></circle>"
+        f"<circle r='4' fill='#34d399' data-stack='local'><animateMotion dur='2.5s' repeatCount='indefinite'><mpath href='#p-svc-duck'/></animateMotion></circle>"
+        f"<circle r='3.5' fill='#fbbf24' data-stack='loop'><animateMotion dur='6.5s' repeatCount='indefinite'><mpath href='#p-feedback'/></animateMotion></circle>"
+
+        # PLANE 1 NODES
+        f"<g class='arch-node' data-stack='core loop' data-title='Ingest &amp; Column Lineage (src/semlayer/ingest, lineage)' "
+        f"data-detail='Snapshots warehouse schema via Warehouse.schema(), parses query_log.jsonl + dbt manifest.json, and extracts column-level lineage with sqlglot.' data-adr='ADR-001 · ADR-012'>"
+        f"<rect x='34' y='54' width='282' height='58' rx='8' fill='#181514' stroke='#332d2a'/>"
+        f"<text x='48' y='77' fill='#f5f4f2' font-size='13' font-weight='700'>Query Log + Schema + dbt Docs</text>"
+        f"<text x='48' y='96' fill='#a8a29e' font-size='11' font-family='monospace'>ingest.schema_snapshot() · sqlglot lineage</text></g>"
+
+        f"<g class='arch-node' data-stack='core loop' data-title='Draft &amp; Structural Conflict Engine (src/semlayer/draft, conflicts)' "
+        f"data-detail='Clusters single-table aggregates (sum, count, count_distinct, avg, min, max), suggests owners &amp; sensitive-dim rules, and flags variants/duplicates for Split or Pick.' data-adr='ADR-012 · ADR-013'>"
+        f"<rect x='34' y='150' width='282' height='82' rx='8' fill='#181514' stroke='#e8652b' stroke-opacity='0.55'/>"
+        f"<text x='48' y='173' fill='#f5f4f2' font-size='13' font-weight='700'>Draft Engine &amp; Conflict Detector</text>"
+        f"<text x='48' y='192' fill='#a8a29e' font-size='11' font-family='monospace'>draft_metrics · draft_graph · suggest_rules</text>"
+        f"<text x='48' y='211' fill='#fbbf24' font-size='11' font-family='monospace'>variants / duplicates → Split or Pick</text></g>"
+
+        f"<g class='arch-node' data-stack='gcp' data-title='Primary LLM · Gemini API via AI Studio (src/semlayer/core/llm.py)' "
+        f"data-detail='Default llm_provider: gemini (gemini-3.5-flash-lite) over OpenAI-compatible endpoint using GEMINI_API_KEY (.env). 15 RPM pacer + HTTP 429 Retry-After backoff; words descriptions only.' data-adr='ADR-024 · ADR-029'>"
+        f"<rect x='34' y='302' width='282' height='78' rx='8' fill='#0f1c26' stroke='#38bdf8' stroke-opacity='0.75'/>"
+        f"<text x='48' y='325' fill='#38bdf8' font-size='12.5' font-weight='700'>Gemini API · AI Studio (Primary LLM)</text>"
+        f"<text x='48' y='344' fill='#e2e8f0' font-size='11' font-family='monospace'>gemini-3.5-flash-lite · GEMINI_API_KEY</text>"
+        f"<text x='48' y='362' fill='#94a3b8' font-size='10.5' font-family='monospace'>15 RPM pacer · 429 Retry-After · wording only</text></g>"
+
+        f"<g class='arch-node' data-stack='local' data-title='Secondary LLM · Local Ollama / OpenAI-Compat (src/semlayer/core/llm.py)' "
+        f"data-detail='Config-only switch to llm_provider: ollama (qwen3.5:9b) or openai (llama.cpp, LM Studio, vLLM), or --no-llm deterministic heuristics for air-gapped &amp; CI runs.' data-adr='ADR-006 · ADR-022'>"
+        f"<rect x='34' y='416' width='282' height='76' rx='8' fill='#0f1d17' stroke='#34d399' stroke-opacity='0.7'/>"
+        f"<text x='48' y='439' fill='#34d399' font-size='12.5' font-weight='700'>Ollama / Local OpenAI (Secondary)</text>"
+        f"<text x='48' y='458' fill='#d1fae5' font-size='11' font-family='monospace'>qwen3.5:9b · :11434 / :8080/v1 · --no-llm</text>"
+        f"<text x='48' y='476' fill='#86efac' font-size='10.5' font-family='monospace'>100% local private data &amp; keyless CI</text></g>"
+
+        # PLANE 2 NODES
+        f"<g class='arch-node' data-stack='core loop' data-title='Human Certification Gate (Web Console &amp; CLI)' "
+        f"data-detail='Invariant 1 &amp; 6: LLMs propose, humans certify. Requires explicit owner; transitions draft → certified (v+1) or deprecated. Pending revisions never overwrite live vN until approved.' data-adr='ADR-003 · ADR-010 · ADR-030'>"
+        f"<rect class='arch-pulse-ring' x='370' y='52' width='340' height='100' rx='10' fill='none' stroke='#e8652b' stroke-width='2'/>"
+        f"<rect x='374' y='56' width='332' height='92' rx='8' fill='#241510' stroke='#e8652b' stroke-width='1.5'/>"
+        f"<text x='390' y='80' fill='#f2743d' font-size='13.5' font-weight='700'>★ Human Certification Gate (UI / CLI)</text>"
+        f"<text x='390' y='100' fill='#f5f4f2' font-size='11' font-family='monospace'>draft → certified (v+1) → deprecated</text>"
+        f"<text x='390' y='118' fill='#d6d3d1' font-size='11' font-family='monospace'>owner required · filter + diff review</text>"
+        f"<text x='390' y='135' fill='#fbbf24' font-size='10.5' font-family='monospace'>drafts &amp; _pending revisions NEVER served</text></g>"
+
+        f"<g class='arch-node' data-stack='core loop' data-title='YAML Registry + Rebuildable SQLite Index (src/semlayer/registry)' "
+        f"data-detail='Git-diffable YAML files in definitions/{{metrics,entities,edges,rules}} are source of truth; SQLite index.db is rebuildable via reindex; audit.jsonl records actor &amp; edit_ratio.' data-adr='ADR-003 · ADR-023'>"
+        f"<rect x='374' y='186' width='332' height='78' rx='8' fill='#181514' stroke='#38312e'/>"
+        f"<text x='390' y='209' fill='#f5f4f2' font-size='13' font-weight='700'>Certified Registry (YAML + SQLite)</text>"
+        f"<text x='390' y='228' fill='#a8a29e' font-size='11' font-family='monospace'>metrics · entities · edges · rules</text>"
+        f"<text x='390' y='246' fill='#736c67' font-size='10.5' font-family='monospace'>_pending/ revisions · audit.jsonl trail</text></g>"
+
+        f"<g class='arch-node' data-stack='core gcp local' data-title='Governed Service, Policy &amp; Compiler (src/semlayer/serve, policy, compiler, graph)' "
+        f"data-detail='The ONLY path to data: verifies certified state, evaluates default-deny RBAC (DENY > ALLOW, row_filter, deny_dims, unrestricted graph gate), and compiles dialect SQL via SimpleCompiler + sqlglot.' data-adr='ADR-002 · ADR-004 · ADR-007 · ADR-014 · ADR-017'>"
+        f"<rect x='374' y='304' width='332' height='88' rx='8' fill='#1b1715' stroke='#e8652b'/>"
+        f"<text x='390' y='327' fill='#f5f4f2' font-size='13' font-weight='700'>Service · Policy · Graph · Compiler</text>"
+        f"<text x='390' y='346' fill='#f2743d' font-size='11' font-family='monospace'>default deny · row_filter · deny_dims</text>"
+        f"<text x='390' y='364' fill='#a8a29e' font-size='11' font-family='monospace'>SimpleCompiler + sqlglot AST · version + owner</text>"
+        f"<text x='390' y='381' fill='#34d399' font-size='10.5' font-family='monospace'>Active runtime: {e(active_mode)}</text></g>"
+
+        f"<g class='arch-node' data-stack='core gcp local' data-title='AI Agent / MCP Client Surface (src/semlayer/serve/mcp_server.py)' "
+        f"data-detail='Agents connect over stdio MCP to list_metrics, describe_metric, query_metric, describe_graph, traverse_graph, report_gap, report_issue. No raw-SQL tool and no warehouse credentials exist.' data-adr='ADR-004 · ADR-008'>"
+        f"<rect x='374' y='434' width='332' height='74' rx='8' fill='#141211' stroke='#443c38'/>"
+        f"<text x='390' y='457' fill='#f5f4f2' font-size='13' font-weight='700'>AI Agents &amp; Eval Harness (MCP stdio)</text>"
+        f"<text x='390' y='476' fill='#a8a29e' font-size='11' font-family='monospace'>query_metric · traverse_graph · report_gap</text>"
+        f"<text x='390' y='493' fill='#f87171' font-size='10.5' font-family='monospace'>NO raw-SQL tool · NO warehouse credentials</text></g>"
+
+        # PLANE 3A: GCP BIGQUERY MCP NODES
+        f"<g class='arch-node' data-stack='gcp' data-title='Google Managed BigQuery MCP Server (src/semlayer/warehouse/bigquery.py)' "
+        f"data-detail='Streamable HTTP MCP client to https://bigquery.googleapis.com/mcp with Google ADC / SA impersonation and x-goog-user-project. Invokes execute_sql_readonly ONLY with pre-flight dryRun byte cap.' data-adr='ADR-026 · ADR-027 · ADR-028'>"
+        f"<rect x='764' y='56' width='322' height='88' rx='8' fill='#102030' stroke='#38bdf8'/>"
+        f"<text x='778' y='79' fill='#38bdf8' font-size='13' font-weight='700'>BigQuery Managed MCP (HTTPS)</text>"
+        f"<text x='778' y='98' fill='#e2e8f0' font-size='11' font-family='monospace'>bigquery.googleapis.com/mcp · ADC OAuth</text>"
+        f"<text x='778' y='116' fill='#7dd3fc' font-size='11' font-family='monospace'>tool: execute_sql_readonly + dryRun cap</text>"
+        f"<text x='778' y='133' fill='#94a3b8' font-size='10.5' font-family='monospace'>sqlglot AST literals · DATE_SUB · IN UNNEST</text></g>"
+
+        f"<g class='arch-node' data-stack='gcp' data-title='BigQuery Dataset on GCP ({e(bq_proj)}.{e(bq_ds)})' "
+        f"data-detail='Cloud tables (customers, orders, payments) seeded via scripts/bq_seed.py (bq load). DML/DDL blocked by execute_sql_readonly; incomplete or truncated (>3,000 row) jobs fail closed.' data-adr='ADR-025 · ADR-028'>"
+        f"<rect x='764' y='184' width='322' height='92' rx='8' fill='#0d1824' stroke='#1e496b'/>"
+        f"<text x='778' y='207' fill='#f5f4f2' font-size='13' font-weight='700'>BigQuery Dataset (Read-Only)</text>"
+        f"<text x='778' y='226' fill='#38bdf8' font-size='11' font-family='monospace'>{e(bq_proj)}.{e(bq_ds)}</text>"
+        f"<text x='778' y='245' fill='#94a3b8' font-size='10.5' font-family='monospace'>customers · orders · payments (bq load)</text>"
+        f"<text x='778' y='263' fill='#34d399' font-size='10.5' font-family='monospace'>Verified live: 33/33 oracle · 33/33 Gemini</text></g>"
+
+        # PLANE 3B: LOCAL DUCKDB NODE
+        f"<g class='arch-node' data-stack='local' data-title='DuckDB Local Read-Only Warehouse (src/semlayer/warehouse/__init__.py)' "
+        f"data-detail='Default zero-config embedded warehouse (read_only=True). Executes compiled SQL with DB-API bound ? parameters, list_contains(?, key), and zero network calls.' data-adr='ADR-009 · Phase 9'>"
+        f"<rect x='764' y='356' width='322' height='148' rx='8' fill='#0e1f18' stroke='#34d399'/>"
+        f"<text x='778' y='382' fill='#34d399' font-size='13' font-weight='700'>DuckDBWarehouse (Local Default)</text>"
+        f"<text x='778' y='403' fill='#e2e8f0' font-size='11' font-family='monospace'>examples/jaffle_shop/jaffle.duckdb</text>"
+        f"<text x='778' y='424' fill='#a7f3d0' font-size='11' font-family='monospace'>read_only=True · bound ? parameters</text>"
+        f"<text x='778' y='444' fill='#86efac' font-size='10.5' font-family='monospace'>list_contains(?, entity_key)</text>"
+        f"<text x='778' y='464' fill='#94a3b8' font-size='10.5' font-family='monospace'>Lazy file open · instant offline CI</text>"
+        f"<text x='778' y='484' fill='#34d399' font-size='10.5' font-family='monospace'>Verified: 89/89 offline pytest suite</text></g>"
+
+        # PLANE 4: DRIFT & FEEDBACK BAR
+        f"<g class='arch-node' data-stack='loop' data-title='Continuous Drift &amp; Feedback Monitor (src/semlayer/monitor)' "
+        f"data-detail='Detects schema changes, new query-log patterns, and z-score value anomalies, opening debounced _pending revisions without breaking live vN metrics; clusters agent report_gap calls.' data-adr='ADR-019 · Phase 4'>"
+        f"<rect x='224' y='542' width='450' height='52' rx='8' fill='#1f190e' stroke='#fbbf24' stroke-opacity='0.75'/>"
+        f"<text x='240' y='564' fill='#fbbf24' font-size='12.5' font-weight='700'>PLANE 4 · Monitor, Drift &amp; Feedback Loop</text>"
+        f"<text x='240' y='582' fill='#fde68a' font-size='10.5' font-family='monospace'>schema/pattern/value drift + usage.jsonl gaps → _pending revision (vN→vN+1)</text></g>"
+
+        f"</svg>"
+        f"<div class='arch-inspector'>"
+        f"<span id='arch-ins-title' class='arch-ins-title'>Hover or click any node to inspect module &amp; invariants</span>"
+        f"<span id='arch-ins-detail' class='arch-ins-detail'>Use the stack pills above to isolate the GCP Cloud path (AI Studio Gemini + BigQuery MCP), the Local Offline path (Ollama + DuckDB), or the Drift &amp; Certification loop.</span>"
+        f"<span id='arch-ins-adr' class='badge badge-orange'>ADR-001 → ADR-030</span>"
+        f"</div></div></section>"
+
+        f"<section id='sys-planes'><h2>Four architectural planes</h2>"
+        f"<div class='card-grid'>"
+        f"<div class='card'><div class='card-head'><span class='card-title'>1. Ingest, Draft &amp; Conflict Plane</span><span class='badge badge-orange'>Propose</span></div>"
+        f"<div style='color:var(--text-secondary);font-size:13px'>Extracts single-table aggregate candidates, FK entity graphs, and sensitive-column deny rules from query logs + schema. Gemini (primary) or Ollama (secondary) writes human-readable descriptions that include filter predicates, never touching SQL expressions.</div></div>"
+        f"<div class='card'><div class='card-head'><span class='card-title'>2. Certification &amp; Policy Core</span><span class='badge badge-ok'>Enforce</span></div>"
+        f"<div style='color:var(--text-secondary);font-size:13px'>YAML-backed state machine (<code>draft → certified → deprecated</code>) requiring human ownership. Every MCP call passes default-deny RBAC, explicit <code>DENY &gt; ALLOW</code>, row-level predicates, denied-dimension checks, and allow-all graph traversal gates.</div></div>"
+        f"<div class='card'><div class='card-head'><span class='card-title'>3. Dual Warehouse Execution</span><span class='badge' style='color:#38bdf8;border-color:#1e496b'>GCP + Local</span></div>"
+        f"<div style='color:var(--text-secondary);font-size:13px'><code>Warehouse</code> protocol abstracts local <code>DuckDBWarehouse</code> (bound parameters) and remote <code>BigQueryMCP</code> (Streamable HTTP to <code>bigquery.googleapis.com/mcp</code>, <code>execute_sql_readonly</code> + <code>dryRun</code> byte cap + <code>sqlglot</code> AST literal binding).</div></div>"
+        f"<div class='card'><div class='card-head'><span class='card-title'>4. Drift &amp; Feedback Loop</span><span class='badge badge-warn'>Observe</span></div>"
+        f"<div style='color:var(--text-secondary);font-size:13px'>Breaking schema changes open debounced <code>_pending/</code> revisions while live <code>vN</code> metrics fail closed if queried on dropped columns. Role-only <code>usage.jsonl</code> aggregates demand, error rates, and clustered agent coverage gaps.</div></div>"
+        f"</div></section>"
+
+        f"<section id='sys-matrix'><h2>GCP Cloud vs. Local stack comparison</h2>"
+        f"<div class='table-wrap'><table><tr><th>Subsystem</th><th>GCP Cloud Mode (Primary LLM / Cloud Warehouse)</th><th>Local / Offline Mode (Secondary LLM / Default Warehouse)</th></tr>"
+        f"<tr><td><b class='def-name'>LLM Provider</b></td><td><code>llm_provider: gemini</code> · <code>gemini-3.5-flash-lite</code> via AI Studio (<code>GEMINI_API_KEY</code> in <code>.env</code>, 15 RPM pacing, <code>429 Retry-After</code>)</td><td><code>llm_provider: ollama | openai | none</code> · <code>qwen3.5:9b</code> on <code>localhost:11434</code> or deterministic heuristics (<code>--no-llm</code>)</td></tr>"
+        f"<tr><td><b class='def-name'>Warehouse Adapter</b></td><td><code>BigQueryMCP</code> → <code>https://bigquery.googleapis.com/mcp</code> over Streamable HTTP (<code>execute_sql_readonly</code> only)</td><td><code>DuckDBWarehouse</code> → embedded <code>jaffle.duckdb</code> opened with <code>read_only=True</code></td></tr>"
+        f"<tr><td><b class='def-name'>Authentication</b></td><td>Google ADC (<code>gcloud auth login --update-adc</code>) or read-only SA impersonation + <code>x-goog-user-project</code>; agents hold zero GCP tokens</td><td>Local filesystem permissions; zero API keys or cloud accounts required (CI default)</td></tr>"
+        f"<tr><td><b class='def-name'>SQL &amp; Injection Safety</b></td><td><code>sqlglot</code> AST literal substitution (scalars/flat lists, null-byte &amp; non-finite float rejection, <code>DATE_SUB</code>, <code>IN UNNEST</code>, post-render re-parse)</td><td>DB-API bound <code>?</code> parameters + regex identifier allow-list + <code>list_contains(?, key)</code></td></tr>"
+        f"<tr><td><b class='def-name'>Execution Safeguards</b></td><td>Pre-flight <code>dryRun: true</code> byte cap (<code>bq_max_bytes</code>), DML blocked server-side, incomplete or paginated/truncated jobs refused</td><td><code>MAX_ROWS = 1000</code> fetch cap, read-only file descriptor, errors fail closed</td></tr>"
+        f"</table></div></section>"
+
+        f"<section id='sys-invariants'><h2>Enforced runtime invariants</h2>"
+        f"<div class='table-wrap'><table><tr><th>#</th><th>Invariant</th><th>Enforcement Module</th></tr>"
+        f"<tr><td class='mono'>1</td><td>Drafts, <code>_pending</code> revisions, and deprecated definitions are never served to agents.</td><td><code>serve/service.py</code> · <code>registry/registry.py</code></td></tr>"
+        f"<tr><td class='mono'>2</td><td>Every metric answer carries certified <code>metric</code> name, <code>version</code>, and <code>owner</code>.</td><td><code>serve/service.py</code></td></tr>"
+        f"<tr><td class='mono'>3</td><td>Default deny RBAC: certified rules only, <code>DENY</code> beats <code>ALLOW</code>, row filters &amp; denied dims enforced on every call.</td><td><code>policy/__init__.py</code></td></tr>"
+        f"<tr><td class='mono'>4</td><td>No raw-SQL MCP tool exists; <code>BigQueryMCP</code> calls only <code>execute_sql_readonly</code>.</td><td><code>serve/mcp_server.py</code> · <code>warehouse/bigquery.py</code></td></tr>"
+        f"<tr><td class='mono'>5</td><td>Sensitive column values (<code>policy.SENSITIVE</code>) are stripped from LLM evaluation prompts; quota/transport errors abort eval runs.</td><td><code>evaluate.py</code> · <code>core/llm.py</code></td></tr>"
+        f"</table></div></section>"
+        f"</main></div>"
+    )
+
+
 def create_app(reg: Registry, svc: Service) -> FastAPI:
     app = FastAPI(title="semlayer")
 
@@ -340,7 +697,8 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
         return {"name": n.name, "version": n.version, "state": n.state.value}
 
     @app.get("/", response_class=HTMLResponse)
-    def index():
+    def index(tab: str = "governance"):
+        active_tab = "system" if tab == "system" else "governance"
         q_items = [(k, n) for k in ("metric", "entity", "edge", "rule") for n in reg.queue(k)]
         rows = "".join(
             _row(n, diff_text=reg.diff(k, n.name) if n.version else "")
@@ -431,15 +789,33 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
         role_opts = "".join(f'<option value="{e(rl)}">{e(rl)}</option>' for rl in known_roles)
 
         wh_badge = "BigQuery MCP (HTTPS)" if wh_dialect == "bigquery" else "DuckDB (Local Read-Only)"
+        gov_cls = "shell tab-view" if active_tab == "governance" else "shell tab-view hidden"
+        gov_tab_cls = "top-tab active" if active_tab == "governance" else "top-tab"
+        sys_tab_cls = "top-tab active" if active_tab == "system" else "top-tab"
+        sys_html = _system_view(
+            wh_dialect, bq_proj, bq_ds,
+            len(cert_metrics), len(cert_rules), len(cert_edges),
+            hidden=(active_tab != "system"),
+        )
 
         return (
             f"<!doctype html><html lang='en'><head><meta charset='utf-8'>"
             f"<meta name='viewport' content='width=device-width,initial-scale=1'>"
-            f"<title>ARTH: SemLayer review</title>{STYLE}{HTMX}{SCRIPT}</head><body>"
+            f"<title>ARTH: Semantic Layer · Governance &amp; System</title>{STYLE}{HTMX}{SCRIPT}</head><body>"
             f"<header class='topbar'>"
             f"<div class='brand-wrap'>"
-            f"<a href='#' class='brand'><span class='brand-dot'></span>ARTH · SemLayer</a>"
-            f"<span class='top-tab'>Governance Console</span>"
+            f"<a href='/?tab=governance' class='brand'><span class='brand-dot'></span>"
+            f"<span>ARTH:</span>"
+            f"<span id='brand-roller' class='brand-roller'><span id='brand-reel' class='brand-reel'>"
+            f"<span class='reel-word'>Semantic</span>"
+            f"<span class='reel-word reel-dhi'>Dhī</span>"
+            f"<span class='reel-word' aria-hidden='true'>Semantic</span>"
+            f"</span></span>"
+            f"<span>Layer</span></a>"
+            f"<nav class='top-tabs' aria-label='Console views'>"
+            f"<a href='/?tab=governance' class='{gov_tab_cls}' data-tab-btn='governance'>Governance Console</a>"
+            f"<a href='/?tab=system' class='{sys_tab_cls}' data-tab-btn='system'>System</a>"
+            f"</nav>"
             f"</div>"
             f"<div class='top-meta'>"
             f"<div class='search-pill'><span style='color:var(--text-muted)'>⌕</span>"
@@ -447,7 +823,7 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
             f"<span class='kbd'>Ctrl K</span></div>"
             f"<span class='badge badge-orange'>{e(wh_badge)}</span>"
             f"</div></header>"
-            f"<div class='shell'>"
+            f"<div id='view-governance' class='{gov_cls}'>"
             f"<aside class='sidebar'>"
             f"<div class='nav-group'><div class='nav-title'>Governance</div>"
             f"<a class='nav-link active' href='#sec-queue'><span>Review queue</span><span class='nav-count'>{len(q_items)}</span></a>"
@@ -531,7 +907,7 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
             f"<tr><td><b class='def-name'>JSON REST API</b></td><td><code>GET /api/metrics</code> · <code>GET /api/queue</code> · <code>POST /api/certify/{{kind}}/{{name}}?owner=...</code></td></tr>"
             f"<tr><td><b class='def-name'>Warehouse Backend</b></td><td><code>DuckDBWarehouse</code> (bound parameters) · <code>BigQueryMCP</code> (<code>https://bigquery.googleapis.com/mcp</code> → <code>execute_sql_readonly</code> + <code>dryRun</code> + <code>sqlglot</code> AST literals)</td></tr>"
             f"</table></div></section>"
-            f"</main></div></body></html>"
+            f"</main></div>{sys_html}</body></html>"
         )
 
     @app.post("/certify/{kind}/{name}", response_class=HTMLResponse)

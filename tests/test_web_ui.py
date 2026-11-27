@@ -37,6 +37,15 @@ def test_web_starts_without_duckdb_file_and_renders_empty_state(web_env):
     assert res.status_code == 200
     assert "No pending drafts or revisions in queue." in res.text
     assert "None certified yet" in res.text
+    # Rolling brand wordmark: ARTH: Semantic / Dhī Layer
+    assert "ARTH:" in res.text and "Semantic" in res.text and "Dhī" in res.text and "Layer" in res.text
+    # System tab and animated dual-stack architecture view (GCP + Local)
+    sys_res = client.get("/?tab=system")
+    assert sys_res.status_code == 200
+    assert 'id=\'view-system\' class=\'shell tab-view\'' in sys_res.text
+    for component in ("BigQuery Managed MCP", "execute_sql_readonly", "gemini-3.5-flash-lite",
+                      "DuckDBWarehouse", "Ollama / Local OpenAI", "Human Certification Gate"):
+        assert component in sys_res.text
     assert client.get("/api/queue").json() == []
     assert client.get("/api/metrics").json() == []
 
