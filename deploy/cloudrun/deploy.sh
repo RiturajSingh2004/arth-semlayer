@@ -16,7 +16,7 @@ gcloud iam service-accounts describe "${SA_EMAIL}" --project="${PROJECT_ID}" >/d
     --display-name="ARTH SemLayer Read-Only Runtime" \
     --project="${PROJECT_ID}"
 
-for ROLE in roles/bigquery.jobUser roles/bigquery.dataViewer; do
+for ROLE in roles/bigquery.jobUser roles/bigquery.dataViewer roles/mcp.toolUser; do
   gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
     --member="serviceAccount:${SA_EMAIL}" \
     --role="${ROLE}" --quiet >/dev/null
