@@ -52,7 +52,8 @@ def load_dotenv(*paths: str | Path) -> None:
 class Config(BaseModel):
     warehouse: Literal["duckdb", "bigquery"] = "duckdb"
     db: str = "examples/jaffle_shop/jaffle.duckdb"
-    bq_project: str = ""  # set in semlayer.yaml, SEMLAYER_BQ_PROJECT, or GOOGLE_CLOUD_PROJECT
+    bq_project: str = ""  # data project (set in semlayer.yaml, SEMLAYER_BQ_PROJECT, or GOOGLE_CLOUD_PROJECT)
+    bq_job_project: str = ""  # optional billing/quota project for cross-project BigQuery MCP queries
     bq_dataset: str = "jaffle_shop"
     bq_location: str = "region-us"  # INFORMATION_SCHEMA.JOBS region qualifier (e.g. region-us, region-eu)
     bq_mcp_url: str = "https://bigquery.googleapis.com/mcp"

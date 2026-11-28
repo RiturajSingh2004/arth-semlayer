@@ -19,6 +19,8 @@ COPY semlayer.yaml ./
 COPY definitions ./definitions
 COPY examples/jaffle_shop ./examples/jaffle_shop
 
+RUN SEMLAYER_LLM_PROVIDER=none uv run --no-dev semlayer --no-llm demo --force
+
 RUN useradd --create-home --uid 10001 semlayer && chown -R semlayer:semlayer /app
 USER semlayer
 

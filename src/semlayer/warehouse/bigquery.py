@@ -253,11 +253,12 @@ class BigQueryMCP:
 
     def __init__(self, project: str, dataset: str, mcp_url: str = BQ_MCP_URL,
                  service_account: str | None = None, max_bytes: int = 100_000_000,
-                 location: str = "region-us",
+                 location: str = "region-us", job_project: str | None = None,
                  token_provider: Callable[[], str] | None = None,
                  dry_run_fn: Callable[[str], int] | None = None,
                  http_client_factory: Callable[[dict[str, str]], object] | None = None):
         self.project, self.dataset, self.mcp_url = project, dataset, mcp_url
+        self.job_project = job_project or project
         self.location = location
         self.service_account, self.max_bytes = service_account, max_bytes
         self._token_provider = token_provider or (
@@ -268,13 +269,13 @@ class BigQueryMCP:
 
     def _headers(self) -> dict[str, str]:
         token = self._token_provider()
-        hdrs = {"x-goog-user-project": self.project}
+        hdrs = {"x-goog-user-project": self.job_project}
         if token:
             hdrs["Authorization"] = f"Bearer {token}"
         return hdrs
 
     def _rest_dry_run_bytes(self, bq_sql: str) -> int:
-        url = f"https://bigquery.googleapis.com/bigquery/v2/projects/{self.project}/queries"
+        url = f"https://bigquery.googleapis.com/bigquery/v2/projects/{self.job_project}/queries"
         body = json.dumps({"query": bq_sql, "useLegacySql": False, "dryRun": True}).encode()
         headers = {"Content-Type": "application/json", **self._headers()}
         req = urllib.request.Request(url, body, headers)
@@ -312,7 +313,7 @@ class BigQueryMCP:
 
                     base_args: dict = {sql_key: bq_sql}
                     if proj_key in props or not props:
-                        base_args[proj_key if proj_key in props else "projectId"] = self.project
+                        base_args[proj_key if proj_key in props else "projectId"] = self.job_project
                     if "useLegacySql" in props:
                         base_args["useLegacySql"] = False
 
