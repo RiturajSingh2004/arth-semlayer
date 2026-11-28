@@ -87,8 +87,8 @@ def google_access_token(service_account: str | None = None,
                 return _Resp(e.code, dict(e.headers.items()) if e.headers else {},
                              e.read() if e.fp else b"")
 
-    creds, _ = google.auth.default(scopes=list(scopes))
     transport = _UrllibRequest()
+    creds, _ = google.auth.default(scopes=list(scopes), request=transport)
     if service_account:
         from google.auth import impersonated_credentials
 
