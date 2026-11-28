@@ -228,7 +228,8 @@ def cmd_serve(a, cfg, reg):
         import uvicorn
 
         from semlayer.serve.web import create_app
-        uvicorn.run(create_app(reg, svc), host=a.host, port=a.port)
+        ro = a.read_only or None
+        uvicorn.run(create_app(reg, svc, read_only=ro), host=a.host, port=a.port)
     else:
         from semlayer.serve.mcp_server import build_server
         build_server(svc).run()
@@ -336,7 +337,8 @@ def main(argv=None):
     add("canary", cmd_canary, dry_run=dict(action="store_true"), by=dict(default="canary"))
     add("reindex", cmd_reindex)
     add("serve", cmd_serve, web=dict(action="store_true"), port=dict(type=int, default=8000),
-        host=dict(default="127.0.0.1"), role=dict(default=None, help="bind caller role in strict mode"))
+        host=dict(default="127.0.0.1"), role=dict(default=None, help="bind caller role in strict mode"),
+        read_only=dict(action="store_true", help="disable registry mutations in --web showcase mode"))
     add("drift", cmd_drift, values=dict(action="store_true"))
     add("feedback", cmd_feedback, min_volume=dict(type=int, default=3),
         recommend_mv=dict(action="store_true", help="emit BigQuery Materialized View DDL recommendations"),

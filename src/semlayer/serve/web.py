@@ -1,5 +1,6 @@
 """Registry JSON API + Ryoku-themed technical Governance & Review UI (FastAPI + HTMX, zero build)."""
 import json
+import os
 from datetime import UTC, datetime
 from html import escape as e
 
@@ -807,8 +808,23 @@ def _system_view(wh_dialect: str, bq_proj: str, bq_ds: str, cert_count: int,
     )
 
 
-def create_app(reg: Registry, svc: Service) -> FastAPI:
+def create_app(reg: Registry, svc: Service, read_only: bool | None = None) -> FastAPI:
     app = FastAPI(title="semlayer")
+    if read_only is None:
+        read_only = os.environ.get("SEMLAYER_WEB_READONLY", "").strip().lower() in {
+            "1", "true", "yes", "on"
+        }
+
+    def _ro_block(is_json: bool = False):
+        msg = "read-only showcase mode: registry mutations are disabled"
+        if is_json:
+            return JSONResponse({"error": msg}, status_code=403)
+        return HTMLResponse(
+            f'<div class="card" style="border-color:rgba(251,191,36,0.45)">'
+            f'<span class="badge badge-warn">READ-ONLY</span> '
+            f'<strong style="color:var(--warn);margin-left:6px">{e(msg)}</strong></div>',
+            status_code=403,
+        )
 
     @app.get("/api/metrics")
     def metrics():
@@ -822,6 +838,8 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
 
     @app.post("/api/certify/{kind}/{name}")
     def api_certify(kind: str, name: str, owner: str = ""):
+        if read_only:
+            return _ro_block(is_json=True)
         if kind not in KINDS:
             return JSONResponse({"error": f"unknown kind: {kind}"}, status_code=400)
         try:
@@ -993,6 +1011,11 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
             if svc.bound_role
             else ""
         )
+        ro_badge = (
+            "<span class='badge badge-warn'>read-only showcase</span>"
+            if read_only
+            else ""
+        )
         role_field_q = (
             f"<div class='form-row'><label>Bound role</label><input value='{e(svc.bound_role)}' disabled></div>"
             if svc.bound_role
@@ -1051,7 +1074,7 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
             f"<div class='search-pill'><span style='color:var(--text-muted)'>⌕</span>"
             f"<input id='global-search' type='search' placeholder='Filter metrics, SQL, lineage, rules...'>"
             f"<span class='kbd'>Ctrl K</span></div>"
-            f"{bound_badge}<span class='badge badge-orange'>{e(wh_badge)}</span>"
+            f"{ro_badge}{bound_badge}<span class='badge badge-orange'>{e(wh_badge)}</span>"
             f"</div></header>"
             f"<div id='view-governance' class='{gov_cls}'>"
             f"<aside class='sidebar'>"
@@ -1170,6 +1193,8 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
 
     @app.post("/certify/{kind}/{name}", response_class=HTMLResponse)
     def certify(kind: str, name: str, owner: str = Form(""), hx_request: str | None = Header(None)):
+        if read_only:
+            return _ro_block()
         if kind not in KINDS:
             return HTMLResponse(f"unknown kind: {e(kind)}", status_code=400)
         try:
@@ -1193,6 +1218,8 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
 
     @app.post("/reject/{kind}/{name}", response_class=HTMLResponse)
     def reject(kind: str, name: str, hx_request: str | None = Header(None)):
+        if read_only:
+            return _ro_block()
         if kind not in KINDS:
             return HTMLResponse(f"unknown kind: {e(kind)}", status_code=400)
         try:
@@ -1212,6 +1239,8 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
 
     @app.post("/conflicts/pick", response_class=HTMLResponse)
     def ui_conflict_pick(winner: str = Form("")):
+        if read_only:
+            return _ro_block()
         cs = detect(reg.list("metric"))
         c = next((x for x in cs if winner in x.variants), None)
         if c is None:
@@ -1221,6 +1250,8 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
 
     @app.post("/conflicts/split", response_class=HTMLResponse)
     async def ui_conflict_split(request: Request):
+        if read_only:
+            return _ro_block()
         form = await request.form()
         concept = str(form.get("concept", ""))
         cs = detect(reg.list("metric"))
@@ -1318,10 +1349,11 @@ def create_app(reg: Registry, svc: Service) -> FastAPI:
 
     @app.post("/ui/canary", response_class=HTMLResponse)
     def ui_canary(dry_run: str = Form("")):
-        res = run_canary(reg, svc.wh, suspend=not bool(dry_run), by="ui-canary")
+        eff_dry = True if read_only else bool(dry_run)
+        res = run_canary(reg, svc.wh, suspend=not eff_dry, by="ui-canary")
         badge = "badge-err" if res["failed"] else "badge-ok"
         label = f"{len(res['failed'])} failed" if res["failed"] else f"{len(res['passed'])} healthy"
-        mode = "dry-run" if dry_run else "live"
+        mode = "dry-run" if eff_dry else "live"
         return (
             f'<div class="card"><div class="card-head">'
             f'<span class="card-title">Canary Probe ({mode})</span>'

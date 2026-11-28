@@ -215,3 +215,22 @@ def test_web_conflict_resolution_and_governed_query_runner(env):
     denied_g = c.post("/ui/traverse", data={"start": "Customer", "path": "HAS_ORDER", "as_role": "eu_analyst"})
     assert "REFUSED" in denied_g.text and "unrestricted" in denied_g.text
 
+
+def test_web_read_only_showcase_blocks_mutations(env):
+    c = TestClient(create_app(env.reg, env.svc, read_only=True))
+    home = c.get("/")
+    assert home.status_code == 200 and "read-only showcase" in home.text
+
+    # All mutating endpoints return 403
+    assert c.post("/certify/metric/revenue", data={"owner": "bob"}).status_code == 403
+    assert c.post("/reject/metric/revenue").status_code == 403
+    assert c.post("/api/certify/metric/revenue?owner=bob").status_code == 403
+    assert c.post("/conflicts/pick", data={"winner": "revenue"}).status_code == 403
+    assert c.post("/conflicts/split", data={"concept": "revenue"}).status_code == 403
+
+    # Interactive read-only playground & canary dry-run still work!
+    assert c.post("/ui/query", data={"metric": "revenue", "as_role": "finance"}).status_code == 200
+    canary = c.post("/ui/canary", data={"dry_run": ""})
+    assert canary.status_code == 200 and "dry-run" in canary.text
+
+
