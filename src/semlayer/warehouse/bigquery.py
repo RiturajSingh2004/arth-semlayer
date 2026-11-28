@@ -62,7 +62,9 @@ def google_access_token(service_account: str | None = None,
 
     class _Resp(google.auth.transport.Response):
         def __init__(self, status: int, headers: dict[str, str], data: bytes):
-            self._status, self._headers, self._data = status, headers, data
+            self._status = status
+            self._headers = {k.lower(): v for k, v in headers.items()}
+            self._data = data
 
         @property
         def status(self) -> int:
@@ -88,7 +90,20 @@ def google_access_token(service_account: str | None = None,
                              e.read() if e.fp else b"")
 
     transport = _UrllibRequest()
-    creds, _ = google.auth.default(scopes=list(scopes), request=transport)
+    try:
+        creds, _ = google.auth.default(scopes=list(scopes), request=transport)
+    except Exception:
+        if service_account:
+            raise
+        # Cloud Run / GCE metadata server fallback (avoids google-auth's `requests` import)
+        meta_url = (
+            "http://metadata.google.internal/computeMetadata/v1/"
+            "instance/service-accounts/default/token"
+        )
+        req = urllib.request.Request(meta_url, headers={"Metadata-Flavor": "Google"})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            data = json.load(r)
+        return str(data["access_token"])
     if service_account:
         from google.auth import impersonated_credentials
 
